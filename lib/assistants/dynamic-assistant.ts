@@ -1,0 +1,282 @@
+import { DebateAssistantConfig, DebateContext } from "@/lib/types/conversation.type";
+
+// Lincoln-Douglas debate phases for context-aware responses
+const DEBATE_PHASES = {
+  AC: {
+    name: "Affirmative Constructive",
+    duration: 360,
+    description: "6 minutes - Present your case supporting the resolution",
+    tips: "Define key terms, present 2-3 strong contentions with evidence"
+  },
+  CX1: {
+    name: "Cross Examination (Neg questions Aff)",
+    duration: 180,
+    description: "3 minutes - Question your opponent's arguments",
+    tips: "Ask strategic questions to expose weaknesses in framework"
+  },
+  NC: {
+    name: "Negative Constructive", 
+    duration: 420,
+    description: "7 minutes - Present case against resolution and refute affirmative",
+    tips: "Present competing framework, directly clash with affirmative case"
+  },
+  CX2: {
+    name: "Cross Examination (Aff questions Neg)",
+    duration: 180,
+    description: "3 minutes - Affirmative questions negative",
+    tips: "Get concessions that help rebuild your case"
+  },
+  "1AR": {
+    name: "First Affirmative Rebuttal",
+    duration: 240,
+    description: "4 minutes - Rebuild affirmative case",
+    tips: "Prioritize strongest arguments, group attacks efficiently"
+  },
+  NR: {
+    name: "Negative Rebuttal",
+    duration: 360,
+    description: "6 minutes - Extend negative arguments",
+    tips: "Extend strongest impacts, highlight dropped arguments"
+  },
+  "2AR": {
+    name: "Second Affirmative Rebuttal",
+    duration: 180,
+    description: "3 minutes - Final affirmative speech",
+    tips: "Focus on key voting issues, strong closing call to action"
+  }
+};
+
+// Determine if AI should wait for user to speak first based on debate order
+function getAIWaitStrategy(phase: string, userSide: string, aiStance: string): boolean {
+  // In Lincoln-Douglas debate, Lincoln (affirmative) traditionally speaks first
+  // So if user is Douglas (negative) and AI is Lincoln (affirmative), AI should wait in phases where both could speak
+  
+  switch (phase) {
+    case "AC":
+      // Affirmative Constructive - Lincoln speaks first
+      // If user is Douglas and AI is Lincoln, AI should wait for user to pass or timer
+      return userSide === "negative" && aiStance === "affirmative";
+    
+    case "NC": 
+      // Negative Constructive - Douglas speaks
+      // If user is Lincoln and AI is Douglas, AI should wait for user to pass or timer
+      return userSide === "affirmative" && aiStance === "negative";
+    
+    case "CX1":
+    case "CX2":
+      // Cross-examination phases - the questioner should wait for the other to speak first
+      const isAIQuestioner = (phase === "CX1" && aiStance === "negative") || (phase === "CX2" && aiStance === "affirmative");
+      return isAIQuestioner;
+    
+    case "1AR":
+    case "2AR":
+      // Affirmative rebuttals - Lincoln speaks
+      return userSide === "negative" && aiStance === "affirmative";
+    
+    case "NR":
+      // Negative rebuttal - Douglas speaks  
+      return userSide === "affirmative" && aiStance === "negative";
+    
+    default:
+      return false;
+  }
+}
+
+export function createLincolnDouglasAssistant(context: DebateContext): any {
+  const { resolution, userSide, currentPhase } = context;
+  
+  // Determine AI's role (opposite of user)
+  const aiRole = userSide === "affirmative" ? "douglas" : "lincoln";
+  const aiStance = userSide === "affirmative" ? "negative" : "affirmative";
+  const aiName = aiRole === "lincoln" ? "Lincoln" : "Douglas";
+  
+  // Get current phase information
+  const phaseInfo = DEBATE_PHASES[currentPhase as keyof typeof DEBATE_PHASES];
+  
+  // Determine which phases this AI should speak in
+  const aiSpeakingPhases = aiStance === "negative" 
+    ? ["CX1", "NC", "NR"] // Negative speaks in these phases
+    : ["CX2", "1AR", "2AR"]; // Affirmative speaks in these phases
+    
+  const shouldAISpeakInCurrentPhase = aiSpeakingPhases.includes(currentPhase);
+  
+  // Determine if AI should wait for user to speak first (Lincoln speaks first rule)
+  const shouldAIWaitForUser = getAIWaitStrategy(currentPhase, userSide, aiStance);
+
+  const baseSystemPrompt = `You are ${aiName}, an expert Lincoln-Douglas debater taking the ${aiStance.toUpperCase()} position in this structured debate.
+
+DEBATE RESOLUTION: "${resolution}"
+
+CURRENT CONTEXT:
+- Phase: ${currentPhase} - ${phaseInfo?.name || "Unknown Phase"}
+- Your Role: ${aiStance.toUpperCase()} side
+- Phase Description: ${phaseInfo?.description || ""}
+- Time Allocated: ${phaseInfo ? Math.floor(phaseInfo.duration / 60) : "?"} minutes
+- Your Speaking Turn: ${shouldAISpeakInCurrentPhase ? "YES - You should speak now" : "NO - Listen and prepare"}
+- Wait Strategy: ${shouldAIWaitForUser ? "WAIT for user to speak first or pass microphone" : "Speak when appropriate"}
+
+SPEAKING PROTOCOL:
+${shouldAIWaitForUser ? 
+  `IMPORTANT: In this phase, you must WAIT for the user to either:
+1. Speak first and then pass the microphone to you (they will say something like "I pass" or "Your turn")
+2. Wait for them to finish their initial statement
+3. Wait for a timer signal indicating their time is up
+DO NOT speak immediately when the call starts. Wait for their cue or timer expiration.` :
+  `You may speak according to normal debate flow when it's your designated speaking time.`}
+
+DEBATE STRUCTURE AWARENESS:
+You are in a formal Lincoln-Douglas debate with these phases:
+1. AC (6min) - Affirmative presents case
+2. CX (3min) - Negative questions Affirmative  
+3. NC (7min) - Negative presents case + refutes Affirmative
+4. CX (3min) - Affirmative questions Negative
+5. 1AR (4min) - Affirmative rebuilds case
+6. NR (6min) - Negative extends arguments  
+7. 2AR (3min) - Affirmative final speech
+
+SPEAKING GUIDELINES:
+${getPhaseSpecificInstructions(currentPhase, aiStance)}
+
+PERSONALITY & STYLE:
+- ${aiRole === "lincoln" ? 
+  "Thoughtful, principled, and methodical. Use logical reasoning and ethical frameworks. Reference justice and moral imperatives when appropriate." :
+  "Sharp, analytical, and strategic. Challenge assumptions with evidence. Focus on practical consequences and real-world impacts."
+}
+- Maintain formal debate decorum while being engaging
+- Use evidence-based arguments with clear reasoning
+- Stay within time limits and be concise
+- Directly address opponent's strongest arguments
+- Build compelling value frameworks
+
+CURRENT PHASE STRATEGY:
+${phaseInfo?.tips || "Adapt to the current debate situation"}
+
+Remember: This is a structured academic debate. Stay focused on the resolution, maintain intellectual rigor, and demonstrate strong argumentation skills.`;
+
+  // Create the assistant configuration
+  return {
+    name: `${aiName} - ${aiStance.charAt(0).toUpperCase() + aiStance.slice(1)} Debater`,
+    firstMessage: getFirstMessage(currentPhase, aiName, aiStance, shouldAISpeakInCurrentPhase, shouldAIWaitForUser),
+    systemMessage: baseSystemPrompt,
+    model: {
+      provider: "openai",
+      model: "gpt-4o-mini",
+      temperature: 0.7,
+      maxTokens: 500, // Keep responses concise for debate format
+    },
+    voice: {
+      provider: "11labs",
+      voiceId: "UgBBYS2sOqTuMpoF3BR0",
+      stability: 0.5,
+      similarityBoost: 0.75,
+      style: 1.0,
+    },
+    transcriber: {
+      provider: "deepgram",
+      model: "nova-2",
+      language: "en-US",
+    },
+    // Configure behavior for waiting
+    ...(shouldAIWaitForUser && {
+      firstMessageTimeout: 30000, // Wait 30 seconds before speaking
+      waitForUserInput: true, // Wait for user input or manual trigger
+    }),
+    // Add debate-specific metadata
+    metadata: {
+      debateRole: aiRole,
+      stance: aiStance,
+      phase: currentPhase,
+      resolution: resolution,
+      shouldSpeak: shouldAISpeakInCurrentPhase,
+      shouldWaitForUser: shouldAIWaitForUser,
+    },
+  };
+}
+
+function getPhaseSpecificInstructions(phase: string, stance: "affirmative" | "negative"): string {
+  const isNegative = stance === "negative";
+  
+  switch (phase) {
+    case "AC":
+      return isNegative 
+        ? "LISTEN CAREFULLY: The affirmative is presenting their case. Take notes on their value framework, contentions, and evidence. Look for weaknesses to exploit in cross-examination."
+        : "This is your opening speech. Present your value framework and 2-3 strong contentions supporting the resolution.";
+        
+    case "CX1":
+      return isNegative
+        ? "CROSS-EXAMINATION TIME: Ask strategic questions to expose flaws in the affirmative's framework and contentions. Focus on getting concessions that will help your case."
+        : "Answer questions directly but strategically. Don't give away more than necessary.";
+        
+    case "NC":
+      return isNegative
+        ? "NEGATIVE CONSTRUCTIVE: Present your competing value framework and case against the resolution. Directly refute the affirmative's strongest arguments with evidence and reasoning."
+        : "LISTEN AND PREPARE: The negative is presenting their case. Note their framework and contentions. Prepare to question them next.";
+        
+    case "CX2":
+      return isNegative
+        ? "Answer cross-examination questions strategically. Be direct but don't concede key points."
+        : "CROSS-EXAMINATION TIME: Question the negative's framework and arguments. Get concessions that will help you rebuild in 1AR.";
+        
+    case "1AR":
+      return isNegative
+        ? "LISTEN: The affirmative is rebuilding their case. Note which arguments they prioritize and which they may be dropping."
+        : "FIRST AFFIRMATIVE REBUTTAL: Rebuild your strongest arguments. Address the negative's attacks efficiently. Don't try to cover everything - prioritize.";
+        
+    case "NR":
+      return isNegative
+        ? "NEGATIVE REBUTTAL: Extend your strongest arguments and impacts. Explain why your framework should be preferred. Highlight any arguments the affirmative dropped."
+        : "LISTEN CAREFULLY: This is the negative's final speech. Note their key arguments for your 2AR response.";
+        
+    case "2AR":
+      return isNegative
+        ? "LISTEN: This is the affirmative's final speech. The debate will end after this."
+        : "SECOND AFFIRMATIVE REBUTTAL: This is your final speech. Focus on the most important voting issues. Explain why you win even if you've lost some arguments.";
+        
+    default:
+      return "Engage appropriately based on the current debate context.";
+  }
+}
+
+function getFirstMessage(phase: string, name: string, stance: string, shouldSpeak: boolean, shouldWait: boolean): string {
+  // If AI should wait, provide a waiting message
+  if (shouldWait) {
+    return `I'm ${name}, ready to debate the ${stance} position. As per debate protocol, I'm waiting for you to begin or pass the microphone to me.`;
+  }
+  
+  if (!shouldSpeak) {
+    return `I'm ${name}, ready to debate the ${stance} position. I'm listening carefully to prepare for my speaking time.`;
+  }
+  
+  switch (phase) {
+    case "CX1":
+    case "CX2":
+      return `I'm ready for cross-examination. Let me ask you some strategic questions about your position.`;
+    case "NC":
+      return `Thank you. I'll now present the negative case against this resolution and address the affirmative's arguments.`;
+    case "NR":
+      return `For my final speech, I'll extend our strongest arguments and explain why the negative position should prevail.`;
+    default:
+      return `I'm ${name}, ready to present the ${stance} position in this debate.`;
+  }
+}
+
+// Utility function to update assistant context mid-debate
+export function updateAssistantContext(assistant: any, newContext: Partial<DebateContext>) {
+  return {
+    ...assistant,
+    metadata: {
+      ...assistant.metadata,
+      ...newContext,
+    },
+    // Update system message with new context if needed
+    systemMessage: assistant.systemMessage.replace(
+      /CURRENT CONTEXT:[\s\S]*?(?=DEBATE STRUCTURE)/,
+      `CURRENT CONTEXT:
+- Phase: ${newContext.currentPhase || assistant.metadata.phase}
+- Time Remaining: ${newContext.timeRemaining ? Math.floor(newContext.timeRemaining / 60) + " minutes" : "Unknown"}
+- Updated Context: ${new Date().toLocaleTimeString()}
+
+DEBATE STRUCTURE`
+    ),
+  };
+} 
