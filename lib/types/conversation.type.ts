@@ -4,6 +4,7 @@ export enum MessageTypeEnum {
   FUNCTION_RESULT = "function-result",
   HANG = "hang",
   CONVERSATION_UPDATE = "conversation-update",
+  TRANSFER_UPDATE = "transfer-update",
 }
 
 export enum TranscriptMessageTypeEnum {
@@ -49,12 +50,22 @@ export interface HangMessage {
   type: MessageTypeEnum.HANG;
 }
 
+export interface TransferUpdateMessage {
+  type: MessageTypeEnum.TRANSFER_UPDATE;
+  transfer: {
+    type: "assistant" | "user";
+    assistantName: string;
+    message: string;
+  };
+}
+
 export type Message = 
   | TranscriptMessage 
   | ConversationUpdateMessage 
   | FunctionCallMessage 
   | FunctionResultMessage 
-  | HangMessage;
+  | HangMessage
+  | TransferUpdateMessage;
 
 // Debate-specific types
 export interface DebateAssistantConfig {

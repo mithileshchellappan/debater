@@ -80,6 +80,12 @@ export default function PanelDebatePage() {
     }
   }, [messages, activeTranscript])
 
+  // Debug currentSpeaker changes
+  useEffect(() => {
+    console.log("🎯 UI currentSpeaker changed to:", currentSpeaker);
+    console.log("👥 Squad members:", squadMembers);
+  }, [currentSpeaker, squadMembers])
+
   // Start timer when call becomes active
   useEffect(() => {
     if (callStatus === CALL_STATUS.ACTIVE && !isTimerRunning) {
@@ -266,7 +272,6 @@ export default function PanelDebatePage() {
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="text-center space-y-4">
-          <h1 className="text-3xl font-bold">Panel Debate</h1>
           <div className="bg-neutral-900 border border-neutral-700 p-4 rounded-none">
             <p className="text-sm text-neutral-400 mb-2">Resolution:</p>
             <p className="font-medium text-white">{resolution}</p>
@@ -276,6 +281,16 @@ export default function PanelDebatePage() {
           {error && (
             <div className="bg-red-900 border border-red-500 p-4 rounded-none">
               <p className="text-red-200">Error: {error}</p>
+            </div>
+          )}
+          
+          {/* Debug Display - Remove this after testing */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="bg-yellow-900 border border-yellow-500 p-2 rounded-none text-xs">
+              <p className="text-yellow-200">Debug: currentSpeaker = {currentSpeaker || "null"}</p>
+              <p className="text-yellow-200">Debug: isUserTurn = {isUserTurn ? "true" : "false"}</p>
+              <p className="text-yellow-200">Debug: actualSpeaker = {actualSpeaker || "null"}</p>
+              <p className="text-yellow-200">UI Priority: {actualSpeaker === "user" ? "USER SPEAKING" : actualSpeaker === "assistant" ? `AI: ${currentSpeaker}` : "NONE"}</p>
             </div>
           )}
         </div>
@@ -402,7 +417,7 @@ export default function PanelDebatePage() {
         {/* Moderator Display */}
         <div
           className={`bg-neutral-900 border-2 p-4 rounded-none transition-all ${
-            currentSpeaker === "moderator" ? "border-purple-500 shadow-lg shadow-purple-500/20" : "border-neutral-700"
+            actualSpeaker === "assistant" && currentSpeaker === "moderator" ? "border-purple-500 shadow-lg shadow-purple-500/20" : "border-neutral-700"
           }`}
         >
           <div className="flex items-center justify-between">
@@ -412,7 +427,7 @@ export default function PanelDebatePage() {
                 <h3 className="text-lg font-bold font-mono">MODERATOR</h3>
                 <p className="text-xs text-neutral-400">{getModeratorStyleName()}</p>
               </div>
-              {currentSpeaker === "moderator" && (
+              {actualSpeaker === "assistant" && currentSpeaker === "moderator" && (
                 <div className="flex items-center space-x-1 ml-2">
                   <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse" />
                   <span className="text-xs text-purple-400 font-mono">SPEAKING</span>
@@ -422,7 +437,7 @@ export default function PanelDebatePage() {
             <div className="flex-1 mx-6">
               <div
                 className={`border p-3 rounded-none transition-all ${
-                  currentSpeaker === "moderator" ? "bg-purple-900 border-purple-500" : "bg-black border-neutral-600"
+                  actualSpeaker === "assistant" && currentSpeaker === "moderator" ? "bg-purple-900 border-purple-500" : "bg-black border-neutral-600"
                 }`}
               >
                 <p className="text-sm text-neutral-300 font-mono">
@@ -435,7 +450,7 @@ export default function PanelDebatePage() {
             </div>
             <div className="w-16 h-8">
               <MiniVoiceVisualizer 
-                isActive={currentSpeaker === "moderator" && isSpeechActive} 
+                isActive={actualSpeaker === "assistant" && currentSpeaker === "moderator" && isSpeechActive} 
                 color="purple" 
                 className="w-full h-full" 
               />
@@ -493,8 +508,8 @@ export default function PanelDebatePage() {
           {/* User Panelist */}
           <div
             className={`bg-black border-2 p-4 rounded-none transition-all ${
-              currentSpeaker === "user"
-                ? "border-blue-500"
+              actualSpeaker === "user"
+                ? "border-blue-500 shadow-lg shadow-blue-500/20"
                 : isUserTurn
                   ? "border-green-500 shadow-lg shadow-green-500/20"
                   : "border-neutral-700"
@@ -510,7 +525,12 @@ export default function PanelDebatePage() {
                   </div>
                 </div>
                 <div className="flex items-center space-x-2">
-                  {isUserTurn && !currentSpeaker && (
+                  {actualSpeaker === "user" ? (
+                    <div className="flex items-center space-x-1">
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+                      <span className="text-xs text-blue-400 font-mono">SPEAKING</span>
+                    </div>
+                  ) : isUserTurn && actualSpeaker !== "assistant" && (
                     <div className="flex items-center space-x-1">
                       <CheckCircle className="w-4 h-4 text-green-400 animate-pulse" />
                       <span className="text-xs text-green-400 font-mono">YOUR TURN</span>
@@ -518,7 +538,7 @@ export default function PanelDebatePage() {
                   )}
                   <div className="w-12 h-6">
                     <MiniVoiceVisualizer 
-                      isActive={currentSpeaker === "user" && actualSpeaker === "user"} 
+                      isActive={actualSpeaker === "user"} 
                       color="blue" 
                       className="w-full h-full" 
                     />
@@ -590,7 +610,7 @@ export default function PanelDebatePage() {
           {/* AI Panelists */}
           {aiPanelists.map((panelist, index) => {
             const panelistId = `panelist_${index}`
-            const isCurrentSpeaker = currentSpeaker === panelistId
+            const isCurrentSpeaker = actualSpeaker === "assistant" && currentSpeaker === panelistId
             const squadMember = squadMembers.find(m => m.assistantId === panelistId)
             
             return (
@@ -654,14 +674,14 @@ export default function PanelDebatePage() {
                   </div>
 
                   {/* Transfer Control */}
-                  {isCallActive && (
+                  {/* {isCallActive && (
                     <Button
                       onClick={() => transferToPanelist(panelistId)}
                       className="w-full bg-neutral-800 text-white hover:bg-orange-600 rounded-none border border-neutral-600 text-xs font-mono"
                     >
                       TRANSFER TO {panelist.name.toUpperCase()}
                     </Button>
-                  )}
+                  )} */}
                 </div>
               </div>
             )

@@ -153,7 +153,49 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     };
 
     const onMessageUpdate = (message: ExtendedMessage) => {
-    //   console.log("Panel message received:", message);
+      console.log("Panel message received:", message.type, message);
+      
+      // Handle transfer updates to switch current speaker
+      if (message.type === MessageTypeEnum.TRANSFER_UPDATE) {
+        const transferMessage = message as any; 
+        const destinationAssistantName = transferMessage.destination?.assistantName;
+        
+        if (destinationAssistantName) {
+          console.log("🔄 Transfer detected to:", destinationAssistantName);
+          console.log("📋 Available panelists:", panelContextRef.current?.aiPanelists?.map(p => p.name));
+          
+          // Map assistant names to UI speaker IDs
+          let newSpeaker: string | null = null;
+          
+          if (destinationAssistantName === "Moderator") {
+            newSpeaker = "moderator";
+          } else if (destinationAssistantName.startsWith("Panelist")) {
+            // Find the panelist by name in the context
+            const panelists = panelContextRef.current?.aiPanelists || [];
+            console.log("🔍 Looking for panelist:", destinationAssistantName, "in:", panelists.map(p => p.name));
+            const panelistIndex = panelists.findIndex(p => p.name === destinationAssistantName);
+            if (panelistIndex !== -1) {
+              newSpeaker = `panelist_${panelistIndex}`;
+              console.log("✅ Found panelist at index:", panelistIndex, "-> UI ID:", newSpeaker);
+            } else {
+              console.log("❌ Panelist not found, available names:", panelists.map(p => p.name));
+            }
+          }
+          
+          if (newSpeaker) {
+            console.log("🎯 Setting current speaker to:", newSpeaker);
+            setCurrentSpeaker(newSpeaker);
+            setIsUserTurn(false); // AI is now speaking
+            
+            // Update squad member active states
+            setSquadMembers(prev => prev.map(member => ({
+              ...member,
+              isActive: member.assistantId === newSpeaker
+            })));
+          }
+        }
+        return; // Don't process transfer messages further
+      }
       
       // Handle tool calls for hand-raising and moderation
       if (message.type === MessageTypeEnum.FUNCTION_CALL) {
@@ -351,16 +393,13 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     if (currentIndex < phases.length - 1) {
       const newPhase = phases[currentIndex + 1];
       setCurrentPhase(newPhase);
-      // No need to send phase updates - assistants understand the full debate flow
     }
   }, [currentPhase]);
 
-  // Transfer controls (simplified since VAPI Squads handle transfers automatically)
   const transferToModerator = useCallback(() => {
     if (callStatus === CALL_STATUS.ACTIVE) {
       setCurrentSpeaker("moderator");
       setIsUserTurn(false);
-      // VAPI Squad system will handle the actual transfer
     }
   }, [callStatus]);
 
@@ -368,7 +407,6 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     if (callStatus === CALL_STATUS.ACTIVE) {
       setCurrentSpeaker(panelistId);
       setIsUserTurn(false);
-      // VAPI Squad system will handle the actual transfer
     }
   }, [callStatus]);
 
@@ -376,7 +414,6 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     if (callStatus === CALL_STATUS.ACTIVE) {
       setCurrentSpeaker("user");
       setIsUserTurn(true);
-      // User can speak directly - no transfer needed
     }
   }, [callStatus]);
 

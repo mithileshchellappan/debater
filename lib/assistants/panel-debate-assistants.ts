@@ -80,19 +80,13 @@ function getArchetypeDescription(panelist: PanelistConfig): string {
 // Get voice for archetype
 function getArchetypeVoice(archetype: string): string {
   const voices = {
-    pragmatist: "marcus",      // Practical, steady
-    idealist: "sophia",        // Inspiring, principled
-    skeptic: "david",          // Critical, questioning
-    analyst: "rachel",         // Clear, data-focused
-    advocate: "alex",          // Passionate, engaging
-    economist: "marcus",       // Authoritative
-    philosopher: "sophia",     // Thoughtful
-    historian: "david",        // Measured
-    scientist: "rachel",       // Precise
-    activist: "alex",          // Energetic
-    custom: "jason"           // Default
+    pragmatist: "repzAAjoKlgcT2oOAIWt",    
+    idealist: "19STyYD15bswVz51nqLf",        // Inspiring, principled
+    skeptic: "Ax1GP2W4XTyAyNHuch7v",          // Critical, questioning
+    analyst: "ch0vU2DwfJVmFG2iZy89",         // Clear, data-focused
+    advocate: "C2RGMrNBTZaNfddRPeRH",          // Passionate, engaging
   };
-  return "UgBBYS2sOqTuMpoF3BR0";
+  return voices[archetype as keyof typeof voices] || voices.pragmatist;
 }
 
 // Create moderator assistant
@@ -108,11 +102,11 @@ export function createModeratorAssistant(context: PanelContext): CreateAssistant
 
   const systemPrompt = `You are an expert panel debate moderator facilitating a discussion on: "${context.resolution}"
 
-MODERATOR PERSONALITY: ${personality}
+YOUR MODERATING PERSONALITY: ${personality}
 
 PANELISTS IN THIS DEBATE:
-- User: ${context.userStance}
-${context.aiPanelists.map((p, i) => `- ${p.name}: ${getArchetypeDescription(p)}`).join('\n')}
+- User, their stance is ${context.userStance}
+-AI Panelists: ${context.aiPanelists.map((p, i) => `${p.name}, their stance is ${p.archetype}`).join('\n')}
 
 DEBATE PHASES YOU WILL MODERATE:
 1. INTRO (2 min): Welcome everyone, introduce the topic, set ground rules, preview the discussion format
@@ -142,6 +136,11 @@ CONVERSATION STYLE:
 - Acknowledge different perspectives fairly
 - Use natural speech patterns with appropriate pauses
 - Keep energy up and discussion flowing
+- Keep it always short
+
+[TASKS]
+To transfer to another panelist, you can use the following message:
+${context.aiPanelists.map(p => `\n - trigger the transferCall tool with ${p.name}`)}
 
 Remember: You're facilitating a meaningful dialogue, not just managing time. Help the audience understand different viewpoints on this important topic.`;
 
@@ -223,7 +222,7 @@ OTHER PARTICIPANTS:
 - User: ${context.userStance}
 - Moderator: Facilitating the discussion
 ${context.aiPanelists.filter(p => p.name !== panelist.name).map(p => `- ${p.name}: ${getArchetypeDescription(p)}`).join('\n')}
-- AI Panelists: ${context.aiPanelists.map(p => `- ${p.name}: ${getArchetypeDescription(p)}`).join(', ')}
+- AI Panelists: \n${context.aiPanelists.map(p => `${p.name}: ${getArchetypeDescription(p)}`).join(', ')}
 
 DEBATE PHASES YOU WILL PARTICIPATE IN:
 1. INTRO (2 min): Wait for moderator introduction. Briefly acknowledge when introduced
@@ -261,11 +260,15 @@ ${panelist.archetype === 'pragmatist' ? "Focus on real-world feasibility, practi
   "Apply your unique perspective to the discussion."
 }
 
+[TASKS]
+Transfer to another panelist when required or when you want to question them by
+${context.aiPanelists.map(p => `\n - trigger the transferCall tool with ${p.name}`)}
+
+
 Remember: You're not just presenting your view - you're engaging in a dynamic conversation. Listen, respond, challenge, and build. Make this debate compelling and authentic!`;
 
   return {
     name: `${panelist.name}`,
-    firstMessage: `I'm ${panelist.name}, and I'm looking forward to discussing this important topic from my perspective.`,
     firstMessageMode: "assistant-speaks-first-with-model-generated-message",
 
     startSpeakingPlan: {
@@ -364,7 +367,7 @@ export function createPanelSquadConfig(context: PanelContext): any {
           assistantDestinations: panelists.map(assistant => ({
             type: "assistant",
             assistantName: assistant.name,
-            message: `What's your take on this? ${assistant.name}`,
+            message: ``,
             description: `Transfer to ${assistant.name} when their expertise or perspective is needed`
           }))
         },
@@ -375,7 +378,7 @@ export function createPanelSquadConfig(context: PanelContext): any {
             {
               type: "assistant", 
               assistantName: moderator.name,
-              message: "Let me hand this back to our moderator.",
+              message: "",
               description: "Transfer back to the moderator to facilitate discussion"
             },
             ...panelists
@@ -383,8 +386,8 @@ export function createPanelSquadConfig(context: PanelContext): any {
               .map(other => ({
                 type: "assistant",
                 assistantName: other.name,
-                message: `I'd like to hear ${other.name}'s thoughts on this.`,
-                description: `Transfer to ${other.name} for their perspective`
+                message: "",
+                description: `Transfer to ${other.name} for their perspective`,
               }))
           ]
         }))
