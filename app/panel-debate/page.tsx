@@ -3,41 +3,51 @@
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Clock, Info, RotateCcw, MicOff, FileText, User, Bot, Hand, CheckCircle, AlertTriangle, X } from "lucide-react"
+import { Clock, Info, RotateCcw, MicOff, FileText, User, Bot, Hand, CheckCircle, AlertTriangle, X, PhoneCall, PhoneOff } from "lucide-react"
 import MiniVoiceVisualizer from "@/components/mini-voice-visualizer"
 import NotesModal from "@/components/notes-modal"
-
-const PANEL_PHASES = [
-  { code: "INTRO", name: "Introductions", description: "Moderator introduces the topic and panelists" },
-  { code: "OPEN", name: "Opening Statements", description: "Each panelist presents their initial position" },
-  { code: "DISC1", name: "Moderated Discussion 1", description: "First round of moderated discussion" },
-  { code: "QA", name: "Cross-Examination", description: "Panelists question each other's positions" },
-  { code: "DISC2", name: "Moderated Discussion 2", description: "Second round of discussion" },
-  { code: "CLOSE", name: "Closing Statements", description: "Final statements from each panelist" },
-  { code: "WRAP", name: "Wrap-up", description: "Moderator summarizes and concludes" },
-]
+import { usePanelDebateVapi, CALL_STATUS, type RaisedHand } from "@/hooks/usePanelDebateVapi"
+import { PANEL_PHASES, type PanelContext } from "@/lib/assistants/panel-debate-assistants"
+import { MessageTypeEnum, TranscriptMessageTypeEnum, TranscriptMessage } from "@/lib/types/conversation.type"
 
 export default function PanelDebatePage() {
   const [resolution, setResolution] = useState("")
   const [userStance, setUserStance] = useState("")
   const [moderatorStyle, setModeratorStyle] = useState("")
   const [aiPanelists, setAiPanelists] = useState<any[]>([])
-  const [currentPhase, setCurrentPhase] = useState(0)
   const [timer, setTimer] = useState(0)
   const [isTimerRunning, setIsTimerRunning] = useState(false)
-  const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null)
-  const [transcript, setTranscript] = useState("")
-  const [isListening, setIsListening] = useState(false)
   const [isNotesOpen, setIsNotesOpen] = useState(false)
-  const [moderatorAction, setModeratorAction] = useState("Introducing the debate topic and panelists...")
-  const [speakRequested, setSpeakRequested] = useState(false)
-  const [panelistStatuses, setPanelistStatuses] = useState<{ [key: string]: string }>({})
-  const [isUserTurn, setIsUserTurn] = useState(false)
-  const [nextSpeaker, setNextSpeaker] = useState<string | null>(null)
   const [showEndWarning, setShowEndWarning] = useState(false)
   const transcriptRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
+  // VAPI Hook Integration
+  const {
+    isSpeechActive,
+    callStatus,
+    audioLevel,
+    activeTranscript,
+    messages,
+    currentSpeaker,
+    actualSpeaker,
+    squadMembers,
+    raisedHands,
+    currentPhase,
+    isUserTurn,
+    startPanelDebate,
+    stopPanelDebate,
+    nextPhase: nextDebatePhase,
+    transferToModerator,
+    transferToPanelist,
+    transferToUser,
+    acknowledgeQuestion,
+    dismissQuestion,
+    sendMessage,
+    error
+  } = usePanelDebateVapi()
+
+  // Load panel configuration from localStorage
   useEffect(() => {
     const storedResolution = localStorage.getItem("panelResolution")
     const storedUserStance = localStorage.getItem("panelUserStance")
@@ -48,104 +58,36 @@ export default function PanelDebatePage() {
     if (storedUserStance) setUserStance(storedUserStance)
     if (storedModeratorStyle) setModeratorStyle(storedModeratorStyle)
     if (storedAIPanelists) {
-      const panelists = JSON.parse(storedAIPanelists)
-      setAiPanelists(panelists)
-
-      // Initialize panelist statuses
-      const statuses: { [key: string]: string } = {}
-      panelists.forEach((p: any, index: number) => {
-        statuses[`ai-${index}`] = "Listening"
-      })
-      setPanelistStatuses(statuses)
+      setAiPanelists(JSON.parse(storedAIPanelists))
     }
   }, [])
 
+  // Timer management
   useEffect(() => {
     let interval: NodeJS.Timeout
-    if (isTimerRunning) {
+    if (isTimerRunning && callStatus === CALL_STATUS.ACTIVE) {
       interval = setInterval(() => {
         setTimer((timer) => timer + 1)
       }, 1000)
     }
     return () => clearInterval(interval)
-  }, [isTimerRunning])
+  }, [isTimerRunning, callStatus])
 
+  // Auto-scroll transcript
   useEffect(() => {
     if (transcriptRef.current) {
       transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight
     }
-  }, [transcript])
+  }, [messages, activeTranscript])
 
-  // Simulate turn management with moderator speaking phases
+  // Start timer when call becomes active
   useEffect(() => {
-    // Simulate moderator deciding turns
-    const turnInterval = setInterval(() => {
-      if (!currentSpeaker && !isListening) {
-        const shouldModeratorSpeak = Math.random() > 0.7 // 30% chance moderator speaks
-
-        if (shouldModeratorSpeak) {
-          setCurrentSpeaker("moderator")
-          setNextSpeaker(null)
-          setIsUserTurn(false)
-          setModeratorAction("Providing guidance and managing the discussion...")
-          const timestamp = formatTime(timer)
-          setTranscript((prev) => prev + `\n[${timestamp}] MODERATOR: Managing the discussion flow...`)
-
-          // Moderator finishes speaking
-          setTimeout(() => {
-            setCurrentSpeaker(null)
-            setModeratorAction("Deciding who speaks next...")
-          }, 3000)
-
-          return // Exit early when moderator is speaking
-        }
-
-        const shouldBeUserTurn = Math.random() > 0.6 // 40% chance it's user's turn
-        setIsUserTurn(shouldBeUserTurn)
-
-        if (shouldBeUserTurn) {
-          setNextSpeaker("user")
-          setModeratorAction("You have the floor. Please share your thoughts...")
-        } else {
-          // Pick a random AI panelist
-          const randomPanelist = Math.floor(Math.random() * aiPanelists.length)
-          setNextSpeaker(`ai-${randomPanelist}`)
-          setModeratorAction(`${aiPanelists[randomPanelist]?.name}, please share your perspective...`)
-
-          // Simulate AI starting to speak after a delay
-          setTimeout(() => {
-            if (nextSpeaker === `ai-${randomPanelist}`) {
-              setCurrentSpeaker(`ai-${randomPanelist}`)
-              setNextSpeaker(null)
-              setIsUserTurn(false)
-              setPanelistStatuses((prev) => ({
-                ...prev,
-                [`ai-${randomPanelist}`]: "Speaking",
-              }))
-              const timestamp = formatTime(timer)
-              setTranscript(
-                (prev) =>
-                  prev + `\n[${timestamp}] ${aiPanelists[randomPanelist]?.name.toUpperCase()}: Making a point...`,
-              )
-              setModeratorAction(`${aiPanelists[randomPanelist]?.name} is speaking...`)
-
-              // AI finishes speaking
-              setTimeout(() => {
-                setCurrentSpeaker(null)
-                setPanelistStatuses((prev) => ({
-                  ...prev,
-                  [`ai-${randomPanelist}`]: "Listening",
-                }))
-                setModeratorAction("Moderating the discussion...")
-              }, 4000)
-            }
-          }, 2000)
-        }
-      }
-    }, 8000) // Check every 8 seconds
-
-    return () => clearInterval(turnInterval)
-  }, [currentSpeaker, isListening, aiPanelists, nextSpeaker, timer])
+    if (callStatus === CALL_STATUS.ACTIVE && !isTimerRunning) {
+      setIsTimerRunning(true)
+    } else if (callStatus === CALL_STATUS.INACTIVE) {
+      setIsTimerRunning(false)
+    }
+  }, [callStatus, isTimerRunning])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -153,105 +95,82 @@ export default function PanelDebatePage() {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
   }
 
+  const handleStartDebate = async () => {
+    if (!resolution || !userStance || !moderatorStyle || aiPanelists.length === 0) {
+      console.error("Missing panel configuration")
+      return
+    }
+
+    const context: PanelContext = {
+      resolution,
+      userStance,
+      moderatorStyle: moderatorStyle as "neutral" | "probing" | "strict",
+      aiPanelists,
+      currentPhase: "INTRO" as keyof typeof PANEL_PHASES
+    }
+
+    await startPanelDebate(context)
+  }
+
+  const handleStopDebate = () => {
+    stopPanelDebate()
+    setTimer(0)
+    setIsTimerRunning(false)
+  }
+
   const toggleMicrophone = () => {
-    setIsListening(!isListening)
-    setCurrentSpeaker(isListening ? null : "user")
+    if (callStatus !== CALL_STATUS.ACTIVE) return
 
-    if (!isListening) {
-      const timestamp = formatTime(timer)
-      setTranscript((prev) => prev + `\n[${timestamp}] YOU: Speaking...`)
-      setIsTimerRunning(true)
-      setModeratorAction("Listening to your statement...")
-      setIsUserTurn(false) // Clear user turn when they start speaking
-      setNextSpeaker(null)
+    if (actualSpeaker === "user" || isUserTurn) {
+      // User is currently speaking or it's their turn
+      // For now, we'll just indicate the user wants to stop speaking
+      // In a real implementation, this would integrate with browser speech recognition
+      sendMessage("I would like to yield the floor back to the moderator.", "user")
     } else {
-      setIsTimerRunning(false)
-      setModeratorAction("Considering responses...")
-      setTimeout(() => {
-        // Simulate AI panelist response
-        const randomPanelist = Math.floor(Math.random() * aiPanelists.length)
-        setCurrentSpeaker(`ai-${randomPanelist}`)
-        setPanelistStatuses((prev) => ({
-          ...prev,
-          [`ai-${randomPanelist}`]: "Speaking",
-        }))
-        const timestamp = formatTime(timer)
-        setTranscript(
-          (prev) =>
-            prev + `\n[${timestamp}] ${aiPanelists[randomPanelist]?.name.toUpperCase()}: Responding to your point...`,
-        )
-        setModeratorAction(`${aiPanelists[randomPanelist]?.name} is responding...`)
-
-        setTimeout(() => {
-          setCurrentSpeaker(null)
-          setPanelistStatuses((prev) => ({
-            ...prev,
-            [`ai-${randomPanelist}`]: "Listening",
-          }))
-          setModeratorAction("Moderating the discussion...")
-        }, 3000)
-      }, 1000)
+      // Request to speak
+      sendMessage("I would like to request the floor to speak.", "user")
     }
   }
 
   const requestToSpeak = () => {
-    setSpeakRequested(true)
-    setModeratorAction("Request received. You'll be called on shortly...")
-    setTimeout(() => {
-      setSpeakRequested(false)
-      setIsUserTurn(true)
-      setNextSpeaker("user")
-      setModeratorAction("You have the floor. Please proceed...")
-    }, 2000)
-  }
-
-  const nextPhase = () => {
-    if (currentPhase < PANEL_PHASES.length - 1) {
-      setCurrentPhase(currentPhase + 1)
-      setTimer(0)
-      setIsTimerRunning(false)
-      setCurrentSpeaker(null)
-      setIsListening(false)
-      setSpeakRequested(false)
-      setIsUserTurn(false)
-      setNextSpeaker(null)
-      setModeratorAction(`Beginning ${PANEL_PHASES[currentPhase + 1].name}...`)
+    if (callStatus === CALL_STATUS.ACTIVE) {
+      sendMessage("I am raising my hand to request permission to speak.", "user")
     }
   }
 
+  const nextPhase = () => {
+    nextDebatePhase()
+  }
+
   const resetDebate = () => {
-    setCurrentPhase(0)
+    handleStopDebate()
     setTimer(0)
-    setIsTimerRunning(false)
-    setCurrentSpeaker(null)
-    setIsListening(false)
-    setTranscript("")
-    setSpeakRequested(false)
-    setIsUserTurn(false)
-    setNextSpeaker(null)
-    setModeratorAction("Introducing the debate topic and panelists...")
-    setPanelistStatuses((prev) => {
-      const reset: { [key: string]: string } = {}
-      Object.keys(prev).forEach((key) => {
-        reset[key] = "Listening"
-      })
-      return reset
-    })
   }
 
   const handleEndDebate = () => {
     // Store debate data for analysis
+    const debateTranscript = transcriptHistory
+      .map(item => {
+        const timestamp = formatTimestamp(item.message.timestamp)
+        return `[${timestamp}] ${item.message.role.toUpperCase()}: ${item.message.transcript}`
+      })
+      .join('\n')
+
     const debateData = {
       type: "panel",
       resolution,
       userStance,
       moderatorStyle,
       aiPanelists,
-      transcript,
+      transcript: debateTranscript,
       duration: timer,
-      phases: currentPhase + 1,
+      phases: Object.keys(PANEL_PHASES).indexOf(currentPhase) + 1,
+      squadMembers,
+      totalMessages: messages.length
     }
+    
     localStorage.setItem("lastDebateData", JSON.stringify(debateData))
+    handleStopDebate()
     router.push("/panel-analysis")
   }
 
@@ -264,6 +183,84 @@ export default function PanelDebatePage() {
     return styles[moderatorStyle] || "Moderator"
   }
 
+  const getCurrentSpeakerDisplay = () => {
+    if (!currentSpeaker) return null
+    
+    const member = squadMembers.find(m => m.assistantId === currentSpeaker)
+    if (member) {
+      return member.role === "moderator" 
+        ? "MODERATOR SPEAKING"
+        : member.role === "user"
+        ? "YOU SPEAKING"
+        : `${member.name.toUpperCase()} SPEAKING`
+    }
+    
+    return "SPEAKING"
+  }
+
+  // Enhanced transcript handling with proper timestamps (matching debate page)
+  const [transcriptHistory, setTranscriptHistory] = useState<Array<{
+    message: TranscriptMessage;
+    receivedAt: number; // timestamp when message was received
+  }>>([]);
+  
+  // Track debate start time for accurate timestamp calculation
+  const [debateStartTime, setDebateStartTime] = useState<number | null>(null);
+
+  // Track when messages are received for proper timing
+  useEffect(() => {
+    const newFinalMessages = messages.filter(msg => 
+      msg.type === MessageTypeEnum.TRANSCRIPT && 
+      msg.transcriptType === TranscriptMessageTypeEnum.FINAL
+    ) as TranscriptMessage[];
+
+    // Add any new final messages to history with received timestamp
+    newFinalMessages.forEach(msg => {
+      setTranscriptHistory(prev => {
+        // Check if this message is already in history
+        const exists = prev.some(item => 
+          item.message.transcript === msg.transcript && 
+          item.message.role === msg.role
+        );
+        
+        if (!exists) {
+          // Use message timestamp if available, otherwise use current time when received
+          const messageTime = msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now();
+          return [...prev, { message: msg, receivedAt: messageTime }];
+        }
+        return prev;
+      });
+    });
+  }, [messages]);
+
+  // Track debate start and clear transcript history when debate resets
+  useEffect(() => {
+    if (callStatus === CALL_STATUS.ACTIVE && debateStartTime === null) {
+      setDebateStartTime(Date.now());
+    } else if (callStatus === CALL_STATUS.INACTIVE) {
+      setTranscriptHistory([]);
+      setDebateStartTime(null);
+    }
+  }, [callStatus, debateStartTime]);
+
+  // Format timestamp from VAPI message or elapsed debate time (matching debate page)
+  const formatTimestamp = (timestamp?: string | number) => {
+    if (typeof timestamp === 'string' && debateStartTime) {
+      // Parse ISO timestamp and calculate elapsed time since debate start.
+      const messageTime = new Date(timestamp).getTime();
+      const elapsedSeconds = Math.floor((messageTime - debateStartTime) / 1000);
+      return formatTime(Math.max(0, elapsedSeconds));
+    } else if (typeof timestamp === 'number') {
+      // Already in seconds format.
+      return formatTime(timestamp);
+    }
+    // Fallback to current timer.
+    return formatTime(timer);
+  }
+
+  const isCallActive = callStatus === CALL_STATUS.ACTIVE
+  const isCallLoading = callStatus === CALL_STATUS.LOADING || callStatus === CALL_STATUS.CONNECTING
+
   return (
     <div className="min-h-screen bg-black text-white p-4 font-sans">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -274,6 +271,13 @@ export default function PanelDebatePage() {
             <p className="text-sm text-neutral-400 mb-2">Resolution:</p>
             <p className="font-medium text-white">{resolution}</p>
           </div>
+          
+          {/* Error Display */}
+          {error && (
+            <div className="bg-red-900 border border-red-500 p-4 rounded-none">
+              <p className="text-red-200">Error: {error}</p>
+            </div>
+          )}
         </div>
 
         {/* Controls Bar */}
@@ -284,71 +288,81 @@ export default function PanelDebatePage() {
               <Clock className="w-5 h-5" />
               <div className="text-center">
                 <div className="text-2xl font-mono">{formatTime(timer)}</div>
-                <div className="text-xs font-mono text-neutral-400">SEGMENT TIME</div>
+                <div className="text-xs font-mono text-neutral-400">DEBATE TIME</div>
               </div>
             </div>
 
             {/* Current Phase */}
             <div className="flex items-center space-x-2 group relative">
-              <span className="font-semibold text-lg font-mono">{PANEL_PHASES[currentPhase].code}</span>
+              <span className="font-semibold text-lg font-mono">
+                {PANEL_PHASES[currentPhase]?.name || currentPhase}
+              </span>
               <Info className="w-4 h-4 cursor-help" />
               <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block bg-black border border-neutral-600 p-3 rounded-none min-w-64 z-10">
-                <p className="font-semibold text-white">{PANEL_PHASES[currentPhase].name}</p>
-                <p className="text-sm text-neutral-400">{PANEL_PHASES[currentPhase].description}</p>
+                <p className="font-semibold text-white">{PANEL_PHASES[currentPhase]?.name}</p>
+                <p className="text-sm text-neutral-400">{PANEL_PHASES[currentPhase]?.description}</p>
               </div>
             </div>
 
-            {/* Active Speaker Indicator */}
-            {currentSpeaker && (
-              <div className="flex items-center space-x-2 bg-white text-black px-3 py-1 rounded-none">
-                <div className="w-2 h-2 bg-black rounded-full animate-pulse"></div>
-                <span className="text-sm font-medium font-mono">
-                  {currentSpeaker === "user"
-                    ? "YOU SPEAKING"
-                    : currentSpeaker === "moderator"
-                      ? "MODERATOR SPEAKING"
-                      : `${aiPanelists[Number.parseInt(currentSpeaker.split("-")[1])]?.name.toUpperCase()} SPEAKING`}
-                </span>
-              </div>
-            )}
+            {/* Call Status */}
+            <div className="flex items-center space-x-2">
+              {isCallLoading && (
+                <div className="flex items-center space-x-2 bg-yellow-600 text-white px-3 py-1 rounded-none">
+                  <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                  <span className="text-sm font-medium font-mono">CONNECTING...</span>
+                </div>
+              )}
+              
+              {isCallActive && currentSpeaker && (
+                <div className="flex items-center space-x-2 bg-white text-black px-3 py-1 rounded-none">
+                  <div className="w-2 h-2 bg-black rounded-full animate-pulse"></div>
+                  <span className="text-sm font-medium font-mono">{getCurrentSpeakerDisplay()}</span>
+                </div>
+              )}
 
-            {/* User Turn Indicator */}
-            {isUserTurn && !currentSpeaker && (
-              <div className="flex items-center space-x-2 bg-green-600 text-white px-3 py-1 rounded-none animate-pulse">
-                <CheckCircle className="w-4 h-4" />
-                <span className="text-sm font-medium font-mono">YOUR TURN TO SPEAK</span>
-              </div>
-            )}
+              {isCallActive && isUserTurn && !currentSpeaker && (
+                <div className="flex items-center space-x-2 bg-green-600 text-white px-3 py-1 rounded-none animate-pulse">
+                  <CheckCircle className="w-4 h-4" />
+                  <span className="text-sm font-medium font-mono">YOUR TURN TO SPEAK</span>
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center space-x-2">
-            <Button
-              onClick={() => setIsTimerRunning(!isTimerRunning)}
-              className="bg-neutral-800 text-white hover:bg-neutral-700 rounded-none border border-neutral-600 font-mono"
-            >
-              {isTimerRunning ? "PAUSE" : "START"}
-            </Button>
-            <Button
-              onClick={nextPhase}
-              disabled={currentPhase >= PANEL_PHASES.length - 1}
-              className="bg-neutral-800 text-white hover:bg-neutral-700 rounded-none border border-neutral-600 disabled:bg-neutral-800 disabled:text-neutral-500 font-mono"
-            >
-              NEXT PHASE
-            </Button>
-            <Button
-              onClick={resetDebate}
-              className="bg-neutral-800 text-white hover:bg-neutral-700 rounded-none border border-neutral-600 font-mono"
-            >
-              <RotateCcw className="w-4 h-4 mr-2" />
-              RESET
-            </Button>
-            <Button
-              onClick={() => setShowEndWarning(true)}
-              className="bg-red-600 text-white hover:bg-red-700 rounded-none border border-red-500 font-mono"
-            >
-              <AlertTriangle className="w-4 h-4 mr-2" />
-              END
-            </Button>
+            {!isCallActive ? (
+              <Button
+                onClick={handleStartDebate}
+                disabled={isCallLoading || !resolution || !userStance || !moderatorStyle || aiPanelists.length === 0}
+                className="bg-green-600 text-white hover:bg-green-700 rounded-none border border-green-500 font-mono"
+              >
+                <PhoneCall className="w-4 h-4 mr-2" />
+                {isCallLoading ? "CONNECTING..." : "START DEBATE"}
+              </Button>
+            ) : (
+              <>
+                <Button
+                  onClick={nextPhase}
+                  className="bg-neutral-800 text-white hover:bg-neutral-700 rounded-none border border-neutral-600 font-mono"
+                >
+                  NEXT PHASE
+                </Button>
+                <Button
+                  onClick={resetDebate}
+                  className="bg-neutral-800 text-white hover:bg-neutral-700 rounded-none border border-neutral-600 font-mono"
+                >
+                  <RotateCcw className="w-4 h-4 mr-2" />
+                  RESET
+                </Button>
+                <Button
+                  onClick={() => setShowEndWarning(true)}
+                  className="bg-red-600 text-white hover:bg-red-700 rounded-none border border-red-500 font-mono"
+                >
+                  <PhoneOff className="w-4 h-4 mr-2" />
+                  END
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
@@ -411,14 +425,68 @@ export default function PanelDebatePage() {
                   currentSpeaker === "moderator" ? "bg-purple-900 border-purple-500" : "bg-black border-neutral-600"
                 }`}
               >
-                <p className="text-sm text-neutral-300 font-mono">{moderatorAction}</p>
+                <p className="text-sm text-neutral-300 font-mono">
+                  {isCallActive 
+                    ? `Managing ${PANEL_PHASES[currentPhase]?.name || currentPhase} phase...`
+                    : "Ready to moderate panel debate"
+                  }
+                </p>
               </div>
             </div>
             <div className="w-16 h-8">
-              <MiniVoiceVisualizer isActive={currentSpeaker === "moderator"} color="purple" className="w-full h-full" />
+              <MiniVoiceVisualizer 
+                isActive={currentSpeaker === "moderator" && isSpeechActive} 
+                color="purple" 
+                className="w-full h-full" 
+              />
             </div>
           </div>
         </div>
+
+        {/* Raised Hands Display */}
+        {raisedHands.length > 0 && (
+          <div className="bg-yellow-900 border border-yellow-500 p-4 rounded-none">
+            <h3 className="text-yellow-200 font-bold mb-2 font-mono">🙋‍♂️ RAISED HANDS</h3>
+            <div className="space-y-2">
+              {raisedHands.map((hand, index) => (
+                <div key={index} className="flex items-center justify-between bg-yellow-800 p-3 rounded-none">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-bold text-yellow-100">{hand.panelistName}</span>
+                      <span className="text-xs bg-yellow-700 px-2 py-1 rounded text-yellow-200">
+                        {hand.questionType}
+                      </span>
+                      <span className={`text-xs px-2 py-1 rounded ${
+                        hand.urgency === "high" ? "bg-red-600 text-white" :
+                        hand.urgency === "medium" ? "bg-orange-600 text-white" :
+                        "bg-green-600 text-white"
+                      }`}>
+                        {hand.urgency}
+                      </span>
+                    </div>
+                    <p className="text-sm text-yellow-200 mt-1">{hand.preview}</p>
+                  </div>
+                  <div className="flex space-x-2 ml-4">
+                    <Button
+                      onClick={() => acknowledgeQuestion(index)}
+                      className="bg-green-600 hover:bg-green-700 text-white rounded-none text-xs"
+                    >
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      ACKNOWLEDGE
+                    </Button>
+                    <Button
+                      onClick={() => dismissQuestion(index)}
+                      className="bg-red-600 hover:bg-red-700 text-white rounded-none text-xs"
+                    >
+                      <X className="w-3 h-3 mr-1" />
+                      DISMISS
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Panelists Display */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -449,7 +517,11 @@ export default function PanelDebatePage() {
                     </div>
                   )}
                   <div className="w-12 h-6">
-                    <MiniVoiceVisualizer isActive={currentSpeaker === "user"} color="blue" className="w-full h-full" />
+                    <MiniVoiceVisualizer 
+                      isActive={currentSpeaker === "user" && actualSpeaker === "user"} 
+                      color="blue" 
+                      className="w-full h-full" 
+                    />
                   </div>
                 </div>
               </div>
@@ -461,15 +533,18 @@ export default function PanelDebatePage() {
               <div className="space-y-2">
                 <Button
                   onClick={toggleMicrophone}
+                  disabled={!isCallActive}
                   className={`w-full rounded-none border-2 transition-all text-xs font-mono ${
-                    isListening
+                    actualSpeaker === "user"
                       ? "bg-red-600 text-white border-red-500 animate-pulse"
                       : isUserTurn
                         ? "bg-green-600 text-white border-green-500 hover:bg-green-700 hover:border-green-600 animate-pulse"
-                        : "bg-neutral-800 text-white border-neutral-600 hover:bg-blue-600 hover:border-blue-500"
+                        : isCallActive
+                          ? "bg-neutral-800 text-white border-neutral-600 hover:bg-blue-600 hover:border-blue-500"
+                          : "bg-neutral-700 text-neutral-500 border-neutral-600 cursor-not-allowed"
                   }`}
                 >
-                  {isListening ? (
+                  {actualSpeaker === "user" ? (
                     <>
                       <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse" />
                       SPEAKING
@@ -482,7 +557,7 @@ export default function PanelDebatePage() {
                   ) : (
                     <>
                       <MicOff className="w-3 h-3 mr-2" />
-                      SPEAK
+                      {isCallActive ? "REQUEST SPEAK" : "SPEAK"}
                     </>
                   )}
                 </Button>
@@ -497,17 +572,15 @@ export default function PanelDebatePage() {
                   </Button>
                   <Button
                     onClick={requestToSpeak}
-                    disabled={speakRequested || isListening || isUserTurn}
+                    disabled={!isCallActive || actualSpeaker === "user" || isUserTurn}
                     className={`rounded-none border border-neutral-600 text-xs font-mono transition-all ${
-                      speakRequested
-                        ? "bg-yellow-600 text-white border-yellow-500"
-                        : isListening || isUserTurn
-                          ? "bg-neutral-700 text-neutral-500 border-neutral-600 cursor-not-allowed"
-                          : "bg-neutral-800 text-white hover:bg-neutral-700"
+                      !isCallActive || actualSpeaker === "user" || isUserTurn
+                        ? "bg-neutral-700 text-neutral-500 border-neutral-600 cursor-not-allowed"
+                        : "bg-neutral-800 text-white hover:bg-neutral-700"
                     }`}
                   >
                     <Hand className="w-3 h-3 mr-1" />
-                    {speakRequested ? "SENT" : isUserTurn ? "READY" : "REQUEST"}
+                    {isUserTurn ? "READY" : "REQUEST"}
                   </Button>
                 </div>
               </div>
@@ -515,112 +588,121 @@ export default function PanelDebatePage() {
           </div>
 
           {/* AI Panelists */}
-          {aiPanelists.map((panelist, index) => (
-            <div
-              key={index}
-              className={`bg-black border-2 p-4 rounded-none transition-all ${
-                currentSpeaker === `ai-${index}`
-                  ? "border-orange-500"
-                  : nextSpeaker === `ai-${index}`
-                    ? "border-yellow-500 shadow-lg shadow-yellow-500/20"
+          {aiPanelists.map((panelist, index) => {
+            const panelistId = `panelist_${index}`
+            const isCurrentSpeaker = currentSpeaker === panelistId
+            const squadMember = squadMembers.find(m => m.assistantId === panelistId)
+            
+            return (
+              <div
+                key={index}
+                className={`bg-black border-2 p-4 rounded-none transition-all ${
+                  isCurrentSpeaker
+                    ? "border-orange-500"
                     : "border-neutral-700"
-              }`}
-            >
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <Bot className="w-5 h-5 text-orange-400" />
-                    <div>
-                      <h3 className="text-sm font-bold font-mono">{panelist.name.toUpperCase()}</h3>
-                      <p className="text-xs text-neutral-400">AI PANELIST</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {nextSpeaker === `ai-${index}` && (
-                      <div className="flex items-center space-x-1">
-                        <Clock className="w-4 h-4 text-yellow-400 animate-pulse" />
-                        <span className="text-xs text-yellow-400 font-mono">NEXT</span>
+                }`}
+              >
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Bot className="w-5 h-5 text-orange-400" />
+                      <div>
+                        <h3 className="text-sm font-bold font-mono">{panelist.name.toUpperCase()}</h3>
+                        <p className="text-xs text-neutral-400">AI PANELIST</p>
                       </div>
-                    )}
-                    <div className="w-12 h-6">
-                      <MiniVoiceVisualizer
-                        isActive={currentSpeaker === `ai-${index}`}
-                        color="orange"
-                        className="w-full h-full"
-                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      {isCurrentSpeaker && (
+                        <div className="flex items-center space-x-1">
+                          <div className="w-2 h-2 bg-orange-400 rounded-full animate-pulse" />
+                          <span className="text-xs text-orange-400 font-mono">SPEAKING</span>
+                        </div>
+                      )}
+                      <div className="w-12 h-6">
+                        <MiniVoiceVisualizer
+                          isActive={isCurrentSpeaker && isSpeechActive}
+                          color="orange"
+                          className="w-full h-full"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="bg-neutral-900 p-2 border border-neutral-600 rounded-none">
-                  <p className="text-xs text-neutral-300">
-                    {panelist.archetype !== "custom"
-                      ? panelist.archetype.charAt(0).toUpperCase() +
-                        panelist.archetype.slice(1).replace(/([A-Z])/g, " $1")
-                      : panelist.customStance}
-                  </p>
-                </div>
-
-                <div
-                  className={`px-3 py-2 rounded-none border text-xs font-medium transition-all font-mono ${
-                    currentSpeaker === `ai-${index}`
-                      ? "bg-orange-600 text-white border-orange-500"
-                      : nextSpeaker === `ai-${index}`
-                        ? "bg-yellow-600 text-white border-yellow-500"
-                        : "bg-neutral-800 text-neutral-300 border-neutral-600"
-                  }`}
-                >
-                  {currentSpeaker === `ai-${index}`
-                    ? "Speaking"
-                    : nextSpeaker === `ai-${index}`
-                      ? "Preparing"
-                      : panelistStatuses[`ai-${index}`] || "Listening"}
-                </div>
-
-                {/* Add after the status div and before the closing space-y-3 div */}
-
-                {/* Quick Stats */}
-                <div className="grid grid-cols-2 gap-2 text-xs mt-2">
-                  <div className="bg-neutral-900 p-2 border border-neutral-600 rounded-none text-center">
-                    <div className="text-orange-400 font-bold">{Math.floor(Math.random() * 8) + 3}</div>
-                    <div className="text-neutral-400">TURNS</div>
+                  <div className="bg-neutral-900 p-2 border border-neutral-600 rounded-none">
+                    <p className="text-xs text-neutral-300">
+                      {panelist.archetype !== "custom"
+                        ? panelist.archetype.charAt(0).toUpperCase() +
+                          panelist.archetype.slice(1).replace(/([A-Z])/g, " $1")
+                        : panelist.customStance}
+                    </p>
                   </div>
-                  <div className="bg-neutral-900 p-2 border border-neutral-600 rounded-none text-center">
-                    <div className="text-orange-400 font-bold">{Math.floor(Math.random() * 5) + 2}m</div>
-                    <div className="text-neutral-400">TIME</div>
+
+                  <div
+                    className={`px-3 py-2 rounded-none border text-xs font-medium transition-all font-mono ${
+                      isCurrentSpeaker
+                        ? "bg-orange-600 text-white border-orange-500"
+                        : squadMember?.isActive
+                          ? "bg-green-600 text-white border-green-500"
+                          : "bg-neutral-800 text-neutral-300 border-neutral-600"
+                    }`}
+                  >
+                    {isCurrentSpeaker
+                      ? "Speaking"
+                      : squadMember?.isActive
+                        ? "Active"
+                        : "Listening"}
                   </div>
+
+                  {/* Transfer Control */}
+                  {isCallActive && (
+                    <Button
+                      onClick={() => transferToPanelist(panelistId)}
+                      className="w-full bg-neutral-800 text-white hover:bg-orange-600 rounded-none border border-neutral-600 text-xs font-mono"
+                    >
+                      TRANSFER TO {panelist.name.toUpperCase()}
+                    </Button>
+                  )}
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Transcript */}
         <div className="bg-black p-4 rounded-none">
           <div ref={transcriptRef} className="h-48 overflow-y-auto font-mono text-sm transcript-area">
-            {transcript.split("\n").map((line, index) => {
-              if (!line.trim()) return null
-              const isUser = line.includes("YOU:")
-              const isModerator = line.includes("MODERATOR:")
-              const isAI = !isUser && !isModerator && line.includes(":")
+            {/* Show final transcript messages */}
+            {transcriptHistory.map((item, index) => {
+              const isUser = item.message.role === 'user'
+              const isAI = item.message.role === 'assistant'
               return (
                 <div
                   key={index}
-                  className={`mb-1 ${
-                    isUser
-                      ? "text-blue-300 text-right"
-                      : isModerator
-                        ? "text-purple-300 text-center"
-                        : isAI
-                          ? "text-orange-300 text-left"
-                          : "text-neutral-300"
+                  className={`mb-2 ${
+                    isUser ? "text-blue-300 text-right" : isAI ? "text-orange-300 text-left" : "text-neutral-300"
                   }`}
                 >
-                  {line}
+                  <span className="text-green-400">[{formatTimestamp(item.message.timestamp)}]</span>{' '}
+                  <span className="text-white">
+                    {item.message.role.toUpperCase()}: {item.message.transcript}
+                  </span>
                 </div>
               )
             })}
-            {!transcript && <div className="text-neutral-500">Transcript will appear here...</div>}
+            
+            {/* Show active (partial) transcript with debouncing */}
+            {activeTranscript && activeTranscript.transcript.length > 3 && (
+              <div className="opacity-75 mb-2 transition-opacity duration-200">
+                <span className="text-green-400">[LIVE]</span>{' '}
+                <span className={`${activeTranscript.role === 'user' ? 'text-blue-200' : 'text-orange-200'}`}>
+                  {activeTranscript.role.toUpperCase()}: {activeTranscript.transcript}
+                </span>
+              </div>
+            )}
+
+            {messages.length === 0 && !activeTranscript && (
+              <div className="text-neutral-500">Real-time transcript will appear here...</div>
+            )}
           </div>
         </div>
 
@@ -628,18 +710,18 @@ export default function PanelDebatePage() {
         <div className="bg-neutral-900 border border-neutral-700 p-4 rounded-none">
           <h3 className="font-semibold mb-3">Debate Progress</h3>
           <div className="flex space-x-2 overflow-x-auto">
-            {PANEL_PHASES.map((phase, index) => (
+            {Object.entries(PANEL_PHASES).map(([phaseKey, phase], index) => (
               <div
-                key={index}
+                key={phaseKey}
                 className={`flex-shrink-0 px-4 py-2 border rounded-none text-sm font-medium transition-all group relative font-mono ${
-                  index === currentPhase
+                  phaseKey === currentPhase
                     ? "bg-white text-black border-white"
-                    : index < currentPhase
+                    : Object.keys(PANEL_PHASES).indexOf(currentPhase) > index
                       ? "bg-neutral-700 text-neutral-300 border-neutral-600"
                       : "bg-neutral-800 text-neutral-400 border-neutral-600"
                 }`}
               >
-                {phase.code}
+                {phaseKey}
                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block bg-black border border-neutral-600 p-2 rounded-none min-w-48 z-10">
                   <p className="font-semibold text-white text-xs">{phase.name}</p>
                   <p className="text-xs text-neutral-400">{phase.description}</p>

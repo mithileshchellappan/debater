@@ -9,26 +9,26 @@ import { ArrowRight, Lightbulb } from "lucide-react"
 const SAMPLE_RESOLUTIONS = [
   {
     title: "Technology and Privacy",
-    resolution: "Resolved: The benefits of artificial intelligence outweigh the risks to personal privacy.",
+    resolution: "The benefits of artificial intelligence outweigh the risks to personal privacy.",
     insights:
       "This resolution explores the tension between technological advancement and individual privacy rights. Consider arguments about data collection, surveillance, and the societal benefits of AI.",
   },
   {
     title: "Environmental Policy",
     resolution:
-      "Resolved: Developed nations have a moral obligation to prioritize climate action over economic growth.",
+      "Developed nations have a moral obligation to prioritize climate action over economic growth.",
     insights:
       "This topic examines the balance between environmental responsibility and economic development. Consider arguments about intergenerational justice and global equity.",
   },
   {
     title: "Education Reform",
-    resolution: "Resolved: Standardized testing does more harm than good in public education.",
+    resolution: "Standardized testing does more harm than good in public education.",
     insights:
       "This resolution questions traditional assessment methods. Consider arguments about educational equity, teaching quality, and student well-being.",
   },
   {
     title: "Social Media Regulation",
-    resolution: "Resolved: Social media platforms should be regulated as public utilities.",
+    resolution: "Social media platforms should be regulated as public utilities.",
     insights:
       "This topic explores the role of social media in society. Consider arguments about free speech, market competition, and public interest.",
   },
@@ -117,7 +117,7 @@ export default function ResolutionPage() {
                   setSelectedResolution("")
                 }}
                 className="bg-black border-neutral-600 text-white rounded-none focus:border-white"
-                placeholder="Resolved: [Your debate topic here]"
+                placeholder="[Your debate topic here]"
               />
             </div>
           </div>
