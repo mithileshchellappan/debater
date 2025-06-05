@@ -138,7 +138,9 @@ export default function DebatePage() {
     currentAssistant,
     isSpeechActive,
     isAIWaiting,
+    actualSpeaker,
     passMicrophone,
+    interruptAssistant,
     error,
     sendMessage
   } = useDebateVapi()
@@ -623,16 +625,25 @@ Remember your role and respond appropriately to this context.`
               </div>
               <p className="text-xs text-neutral-400 font-mono">{userStance}</p>
               <Button
-                onClick={toggleMicrophone}
+                onClick={() => {
+                  // If it's user phase and AI is speaking, interrupt the assistant
+                  if (isUserPhase && actualSpeaker === "assistant") {
+                    interruptAssistant();
+                  } else {
+                    toggleMicrophone();
+                  }
+                }}
                 disabled={callStatus === CALL_STATUS.LOADING}
                 className={`w-full rounded-none border-2 transition-all text-sm font-mono ${
-                  isUserPhase && isSpeechActive
+                  actualSpeaker === "user"
                     ? "bg-red-600 text-white border-red-500 animate-pulse"
                     : isUserTurn
                       ? "bg-green-600 text-white border-green-500 hover:bg-green-700 hover:border-green-600 animate-pulse"
-                      : callStatus === CALL_STATUS.ACTIVE
-                        ? "bg-neutral-800 text-neutral-400 border-neutral-600 cursor-not-allowed"
-                        : "bg-blue-600 text-white border-blue-500 hover:bg-blue-700 hover:border-blue-600"
+                      : isUserPhase && actualSpeaker === "assistant"
+                        ? "bg-orange-600 text-white border-orange-500 hover:bg-orange-700"
+                        : callStatus === CALL_STATUS.ACTIVE
+                          ? "bg-neutral-800 text-neutral-400 border-neutral-600 cursor-not-allowed"
+                          : "bg-blue-600 text-white border-blue-500 hover:bg-blue-700 hover:border-blue-600"
                 }`}
               >
                 {callStatus === CALL_STATUS.LOADING ? (
@@ -640,7 +651,7 @@ Remember your role and respond appropriately to this context.`
                     <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse" />
                     CONNECTING
                   </>
-                ) : isUserPhase && isSpeechActive ? (
+                ) : actualSpeaker === "user" ? (
                   <>
                     <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse" />
                     SPEAKING
@@ -649,6 +660,11 @@ Remember your role and respond appropriately to this context.`
                   <>
                     <Mic className="w-4 h-4 mr-2" />
                     SPEAK NOW
+                  </>
+                ) : isUserPhase && actualSpeaker === "assistant" ? (
+                  <>
+                    <X className="w-4 h-4 mr-2" />
+                    INTERRUPT
                   </>
                 ) : callStatus === CALL_STATUS.ACTIVE ? (
                   <>
@@ -689,7 +705,7 @@ Remember your role and respond appropriately to this context.`
               <div className="w-[500px] h-[500px] bg-black">
                 <AsciiVoiceVisualizer
                   isActive={callStatus === CALL_STATUS.ACTIVE}
-                  currentSpeaker={isSpeechActive ? (isUserPhase ? "user" : "ai") : null}
+                  currentSpeaker={actualSpeaker === "user" ? "user" : actualSpeaker === "assistant" ? "ai" : null}
                   aiStatus={callStatus === CALL_STATUS.LOADING ? "THINKING..." : currentAssistant ? "READY" : "INACTIVE"}
                   className="w-full h-full"
                 />
@@ -698,11 +714,11 @@ Remember your role and respond appropriately to this context.`
             <div className="text-center mt-1">
               <div className="text-sm font-mono text-neutral-400">
                 {callStatus === CALL_STATUS.LOADING && "CONNECTING TO AI"}
-                {callStatus === CALL_STATUS.ACTIVE && isSpeechActive && isUserPhase && "USER SPEAKING"}
-                {callStatus === CALL_STATUS.ACTIVE && isSpeechActive && !isUserPhase && "AI SPEAKING"}
-                {callStatus === CALL_STATUS.ACTIVE && !isSpeechActive && isUserTurn && "YOUR TURN"}
-                {callStatus === CALL_STATUS.ACTIVE && !isSpeechActive && isAITurn && !isAIWaiting && "AI TURN"}
-                {callStatus === CALL_STATUS.ACTIVE && !isSpeechActive && isAIWaiting && `${aiName.toUpperCase()} WAITING - SPEAK FIRST OR PASS MIC`}
+                {callStatus === CALL_STATUS.ACTIVE && actualSpeaker === "user" && "USER SPEAKING"}
+                {callStatus === CALL_STATUS.ACTIVE && actualSpeaker === "assistant" && "AI SPEAKING"}
+                {callStatus === CALL_STATUS.ACTIVE && !actualSpeaker && isUserTurn && "YOUR TURN"}
+                {callStatus === CALL_STATUS.ACTIVE && !actualSpeaker && isAITurn && !isAIWaiting && "AI TURN"}
+                {callStatus === CALL_STATUS.ACTIVE && !actualSpeaker && isAIWaiting && `${aiName.toUpperCase()} WAITING - SPEAK FIRST OR PASS MIC`}
                 {callStatus === CALL_STATUS.INACTIVE && "STANDBY"}
               </div>
             </div>

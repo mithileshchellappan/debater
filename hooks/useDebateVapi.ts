@@ -27,12 +27,14 @@ export interface UseDebateVapiReturn {
   messages: Message[];
   currentAssistant: any | null;
   isAIWaiting: boolean;
+  actualSpeaker: "user" | "assistant" | null;
   startDebate: (context: DebateContext) => Promise<void>;
   stopDebate: () => void;
   switchPhase: (newPhase: string, context: DebateContext) => Promise<void>;
   toggleCall: () => void;
   sendMessage: (message: string, role?: "user" | "system") => void;
   passMicrophone: () => void;
+  interruptAssistant: () => void;
   error: string | null;
 }
 
@@ -45,6 +47,9 @@ export function useDebateVapi(): UseDebateVapiReturn {
   const [currentAssistant, setCurrentAssistant] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
   
+  // Track actual speaker based on speech events
+  const [actualSpeaker, setActualSpeaker] = useState<"user" | "assistant" | null>(null);
+  
   // Keep track of current debate context
   const debateContextRef = useRef<DebateContext | null>(null);
   const assistantCacheRef = useRef<Map<string, any>>(new Map());
@@ -55,13 +60,24 @@ export function useDebateVapi(): UseDebateVapiReturn {
 
   useEffect(() => {
     const onSpeechStart = () => {
+      console.log("Speech started");
       setIsSpeechActive(true);
       setError(null);
+      
+      // Determine who is speaking based on the last transcript message
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage && lastMessage.type === MessageTypeEnum.TRANSCRIPT) {
+        setActualSpeaker(lastMessage.role === 'user' ? 'user' : 'assistant');
+      } else {
+        // Default assumption - if no recent transcript, likely assistant speaking
+        setActualSpeaker('assistant');
+      }
     };
 
     const onSpeechEnd = () => {
       console.log("Speech has ended");
       setIsSpeechActive(false);
+      setActualSpeaker(null);
     };
 
     const onCallStartHandler = () => {
@@ -89,6 +105,11 @@ export function useDebateVapi(): UseDebateVapiReturn {
         message.type === MessageTypeEnum.TRANSCRIPT &&
         message.transcriptType === TranscriptMessageTypeEnum.PARTIAL
       ) {
+        // Update speaker tracking for partial transcripts
+        if (isSpeechActive) {
+          setActualSpeaker(message.role === 'user' ? 'user' : 'assistant');
+        }
+        
         // Debounce partial transcript updates to reduce glitching
         if (partialTranscriptTimeoutRef.current) {
           clearTimeout(partialTranscriptTimeoutRef.current);
@@ -160,6 +181,12 @@ export function useDebateVapi(): UseDebateVapiReturn {
 
   const startDebate = useCallback(async (context: DebateContext) => {
     try {
+      console.log("🚀 NEW DEBATE CALL STARTING:", {
+        phase: context.currentPhase,
+        userSide: context.userSide,
+        resolution: context.resolution.substring(0, 50) + "..."
+      });
+      
       setCallStatus(CALL_STATUS.LOADING);
       setError(null);
       
@@ -170,11 +197,11 @@ export function useDebateVapi(): UseDebateVapiReturn {
       const assistant = await createDebateAssistant(context);
       setCurrentAssistant(assistant);
       
-      console.log("Starting debate with assistant:", assistant.name);
+      console.log("📞 Starting VAPI call with assistant:", assistant.name);
       console.log("Initial phase:", context.currentPhase, "| User side:", context.userSide);
       
       const response = await vapi.start(assistant);
-      console.log("Debate call started:", response);
+      console.log("✅ NEW VAPI CALL SUCCESSFULLY STARTED:", response);
       
       // Send initial phase update
       setTimeout(() => {
@@ -191,23 +218,29 @@ export function useDebateVapi(): UseDebateVapiReturn {
   }, [createDebateAssistant]);
 
   const stopDebate = useCallback(() => {
+    console.log("🛑 STOPPING DEBATE CALL - This is a complete call termination");
+    
     setCallStatus(CALL_STATUS.ENDING);
     vapi.stop();
+    
+    console.log("📞 VAPI call stopped, cleaning up state...");
+    
     // Clear context and assistant
     debateContextRef.current = null;
     setCurrentAssistant(null);
     setMessages([]);
     setActiveTranscript(null);
     setDebouncedActiveTranscript(null);
+    setActualSpeaker(null);
     
     // Clear any pending partial transcript timeouts
     if (partialTranscriptTimeoutRef.current) {
       clearTimeout(partialTranscriptTimeoutRef.current);
       partialTranscriptTimeoutRef.current = null;
     }
+    
+    console.log("✅ DEBATE CALL FULLY STOPPED");
   }, []);
-
-
 
   const toggleCall = useCallback(() => {
     if (callStatus === CALL_STATUS.ACTIVE) {
@@ -244,6 +277,26 @@ export function useDebateVapi(): UseDebateVapiReturn {
     }
   }, [callStatus, sendMessage]);
 
+  const interruptAssistant = useCallback(() => {
+    if (callStatus === CALL_STATUS.ACTIVE && actualSpeaker === 'assistant') {
+      // Send interrupt signal to make assistant stop speaking immediately
+      vapi.send({
+        type: "add-message",
+        message: {
+          role: "system",
+          content: "STOP speaking immediately. The user wants to speak now. Do not respond or say anything else.",
+        },
+      });
+      console.log("Interrupted assistant - sending stop signal");
+      
+      // Reset speaker state
+      setActualSpeaker(null);
+      setIsSpeechActive(false);
+    } else {
+      console.warn("Cannot interrupt: Assistant not currently speaking or VAPI not active");
+    }
+  }, [callStatus, actualSpeaker]);
+
   const switchPhase = useCallback(async (newPhase: string, context: DebateContext) => {
     if (callStatus !== CALL_STATUS.ACTIVE) {
       console.warn("Cannot switch phase when call is not active");
@@ -251,7 +304,12 @@ export function useDebateVapi(): UseDebateVapiReturn {
     }
 
     try {
-      console.log("Switching to phase:", newPhase);
+      console.log("🔄 PHASE SWITCH START:", {
+        from: debateContextRef.current?.currentPhase,
+        to: newPhase,
+        callStatus,
+        assistantName: currentAssistant?.name
+      });
       
       // Update context
       const updatedContext = { ...context, currentPhase: newPhase };
@@ -259,15 +317,20 @@ export function useDebateVapi(): UseDebateVapiReturn {
       
       // Send phase update to existing assistant via vapi.send
       const phaseMessage = createPhaseUpdateMessage(updatedContext);
+      console.log("📨 Sending phase update message:", phaseMessage.substring(0, 200) + "...");
       sendMessage(phaseMessage, "system");
       
-      console.log("Phase switched to:", newPhase);
+      console.log("✅ PHASE SWITCH COMPLETE:", {
+        newPhase,
+        callStillActive: callStatus === CALL_STATUS.ACTIVE,
+        assistantStillSame: currentAssistant?.name
+      });
       
     } catch (err: any) {
-      console.error("Failed to switch phase:", err);
+      console.error("❌ PHASE SWITCH ERROR:", err);
       setError(err.message || "Failed to switch debate phase");
     }
-  }, [callStatus, sendMessage]);
+  }, [callStatus, sendMessage, currentAssistant]);
 
   return {
     isSpeechActive,
@@ -277,12 +340,14 @@ export function useDebateVapi(): UseDebateVapiReturn {
     messages,
     currentAssistant,
     isAIWaiting: currentAssistant?.metadata?.shouldWaitForUser || false,
+    actualSpeaker,
     startDebate,
     stopDebate,
     switchPhase,
     toggleCall,
     sendMessage,
     passMicrophone,
+    interruptAssistant,
     error,
   };
 }
