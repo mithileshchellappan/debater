@@ -7,6 +7,7 @@ interface AsciiVoiceVisualizerProps {
   currentSpeaker: "user" | "ai" | null
   className?: string
   aiStatus?: string // Add aiStatus prop to track AI thinking state
+  audioLevel?: number // Add audioLevel prop from VAPI volume-level event (0-1)
 }
 
 export default function AsciiVoiceVisualizer({
@@ -14,15 +15,11 @@ export default function AsciiVoiceVisualizer({
   currentSpeaker,
   className = "",
   aiStatus = "READY", // Default to READY
+  audioLevel = 0, // Default to 0
 }: AsciiVoiceVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const asciiRef = useRef<HTMLDivElement>(null)
-  const animationRef = useRef<number>()
-  const audioContextRef = useRef<AudioContext>()
-  const analyserRef = useRef<AnalyserNode>()
-  const dataArrayRef = useRef<Uint8Array>()
-  const sourceRef = useRef<MediaStreamAudioSourceNode>()
-  const streamRef = useRef<MediaStream>()
+  const animationRef = useRef<number | undefined>(undefined)
 
   // ASCII characters from darkest to lightest
   const asciiChars = " .:-=+*#%@"
@@ -193,8 +190,6 @@ export default function AsciiVoiceVisualizer({
 
     const ball = ballRef.current
 
-
-
     // Update target hue based on current speaker
     ball.targetHue = currentSpeaker === "user" ? 200 : currentSpeaker === "ai" ? 30 : 0
 
@@ -222,29 +217,14 @@ export default function AsciiVoiceVisualizer({
       // Subtle pulsing for thinking state
       const pulseFactor = 0.05 * Math.sin(ball.thinkingTime / 20) + 0.95
       ball.targetRadius = ball.baseRadius * pulseFactor
-    } else if (isActive && currentSpeaker === "user" && analyserRef.current && dataArrayRef.current) {
-      analyserRef.current.getByteFrequencyData(dataArrayRef.current)
-
-      const sum = dataArrayRef.current.reduce((a, b) => a + b, 0)
-      volume = sum / dataArrayRef.current.length / 255
-
-      // Reduced volume boost from 3x to 2x
-      volume = Math.min(1, volume * 2)
-
-      let maxAmplitude = 0
-      let maxIndex = 0
-      for (let i = 0; i < dataArrayRef.current.length; i++) {
-        if (dataArrayRef.current[i] > maxAmplitude) {
-          maxAmplitude = dataArrayRef.current[i]
-          maxIndex = i
-        }
-      }
-      dominantFreq = maxIndex / dataArrayRef.current.length
+    } else if (isActive && (currentSpeaker === "user" || currentSpeaker === "ai")) {
+      // Use VAPI audioLevel for both user and AI speech
+      volume = audioLevel || 0;
 
       // Only pulse when speech is detected (volume above threshold)
       if (volume > SPEECH_THRESHOLD) {
-        // Reduced expansion multiplier from 120 to 80
-        ball.targetRadius = ball.baseRadius + volume * 80
+        // Scale the radius based on volume level
+        ball.targetRadius = ball.baseRadius + volume * 100
 
         // Create particles when speaking
         addParticles(volume, canvas)
@@ -367,42 +347,35 @@ export default function AsciiVoiceVisualizer({
       }
     })
 
-    // Draw enhanced frequency bars
-    if (
-      (isActive && currentSpeaker === "user" && analyserRef.current && dataArrayRef.current) ||
-      (currentSpeaker === "ai" && !isAiThinking)
-    ) {
+    // Draw enhanced frequency bars based on VAPI volume
+    if (isActive && (currentSpeaker === "user" || currentSpeaker === "ai") && !isAiThinking) {
       const barCount = 32
       const angleStep = (Math.PI * 2) / barCount
 
       for (let i = 0; i < barCount; i++) {
         const angle = i * angleStep
 
-        // Get amplitude with boost
+        // Get amplitude based on VAPI volume level
         let amplitude
-        if (currentSpeaker === "user" && analyserRef.current && dataArrayRef.current) {
-          amplitude = dataArrayRef.current[i * 4] / 255
-          amplitude = Math.min(1, amplitude * 2) // Reduced from 3 to 2
-        } else if (currentSpeaker === "ai") {
-          // Simulate AI speaking with animated bars
-          const time = Date.now() / 500
-          amplitude = 0.2 + 0.5 * Math.sin(time + i * 0.2) // Reduced from 0.3 + 0.7 to 0.2 + 0.5
+        if (audioLevel > 0) {
+          // Use volume level with some variation per bar for visual effect
+          amplitude = audioLevel * (0.5 + 0.5 * Math.sin(Date.now() / 500 + i * 0.3))
           amplitude = Math.max(0, Math.min(1, amplitude))
         } else {
-          amplitude = 0.05 // Reduced from 0.1 to 0.05
+          amplitude = 0.05 // Small baseline
         }
 
-        const barLength = amplitude * 40 // Reduced from 60 to 40
+        const barLength = amplitude * 50
 
         const startX = ball.x + Math.cos(angle) * (ball.currentRadius + 10)
         const startY = ball.y + Math.sin(angle) * (ball.currentRadius + 10)
         const endX = ball.x + Math.cos(angle) * (ball.currentRadius + 10 + barLength)
-        const endY = ball.x + Math.sin(angle) * (ball.currentRadius + 10 + barLength)
+        const endY = ball.y + Math.sin(angle) * (ball.currentRadius + 10 + barLength)
 
-        ctx.strokeStyle = `rgba(${ballColor}, ${amplitude * 1.2})` // Reduced from 1.5 to 1.2
-        ctx.lineWidth = 2 // Reduced from 3 to 2
-        ctx.shadowColor = `rgba(${ballColor}, ${amplitude * 0.8})` // Reduced from 1 to 0.8
-        ctx.shadowBlur = 3 // Reduced from 4 to 3
+        ctx.strokeStyle = `rgba(${ballColor}, ${amplitude * 1.2})`
+        ctx.lineWidth = 2
+        ctx.shadowColor = `rgba(${ballColor}, ${amplitude * 0.8})`
+        ctx.shadowBlur = 3
         ctx.beginPath()
         ctx.moveTo(startX, startY)
         ctx.lineTo(endX, endY)
@@ -459,56 +432,8 @@ export default function AsciiVoiceVisualizer({
 
     resizeCanvas()
 
-    const initAudio = async () => {
-      if (!isActive || currentSpeaker !== "user") return
-
-      try {
-        // Request microphone with optimized constraints for all devices
-        const constraints = {
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-            // Try to get the best possible audio quality
-            sampleRate: 48000,
-            channelCount: 1,
-            volume: 1.0,
-          },
-        }
-
-        const stream = await navigator.mediaDevices.getUserMedia(constraints)
-        streamRef.current = stream
-
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-          // Higher sample rate for better quality
-          sampleRate: 48000,
-        })
-
-        const analyser = audioContext.createAnalyser()
-        const source = audioContext.createMediaStreamSource(stream)
-
-        // Adjust analyser settings for better sensitivity
-        analyser.fftSize = 256
-        analyser.smoothingTimeConstant = 0.7 // Increased from 0.5 to 0.7 for smoother response
-
-        // Reduced gain from 3.0 to 2.0
-        const gainNode = audioContext.createGain()
-        gainNode.gain.value = 2.0
-        source.connect(gainNode)
-        gainNode.connect(analyser)
-
-        audioContextRef.current = audioContext
-        analyserRef.current = analyser
-        sourceRef.current = source
-        dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount)
-
-        console.log("Audio initialized with reduced sensitivity")
-      } catch (err) {
-        console.error("Error accessing microphone:", err)
-      }
-    }
-
-    initAudio()
+    // No longer need microphone access - using VAPI audioLevel instead
+    console.log("🎭 Visualizer initialized with VAPI audio levels")
 
     // Add a small delay to ensure canvas is properly sized before starting animation
     setTimeout(() => {
@@ -518,12 +443,6 @@ export default function AsciiVoiceVisualizer({
     return () => {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current)
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop())
-      }
-      if (audioContextRef.current && audioContextRef.current.state !== "closed") {
-        audioContextRef.current.close()
       }
     }
   }, [isActive, currentSpeaker])

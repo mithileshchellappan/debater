@@ -27,7 +27,7 @@ import {
 // Mock data for panel debate analysis
 const MOCK_PANEL_ANALYSIS_DATA = {
   debateType: "panel",
-  resolution: "Resolved: The benefits of artificial intelligence outweigh the risks to personal privacy.",
+  resolution: "The benefits of artificial intelligence outweigh the risks to personal privacy.",
   participants: {
     user: { name: "YOU", stance: "Focus on economic impacts and job creation" },
     moderator: { name: "MODERATOR", style: "Inquisitive & Probing" },

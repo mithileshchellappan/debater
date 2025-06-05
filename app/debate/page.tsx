@@ -140,6 +140,7 @@ export default function DebatePage() {
     isSpeechActive,
     isAIWaiting,
     actualSpeaker,
+    audioLevel,
     passMicrophone,
     interruptAssistant,
     error,
@@ -156,8 +157,8 @@ export default function DebatePage() {
   const currentPhaseData = DEBATE_PHASES[currentPhase]
   const isUserPhase = currentPhaseData?.speaker === side
   const isAIPhase = currentPhaseData?.speaker !== side
-  const isUserTurn = isUserPhase && callStatus === CALL_STATUS.ACTIVE && !isSpeechActive
-  const isAITurn = isAIPhase && currentAssistant
+  const isUserTurn = actualSpeaker === "user" && callStatus === CALL_STATUS.ACTIVE
+  const isAITurn = actualSpeaker === "assistant" && callStatus === CALL_STATUS.ACTIVE
 
   // Enhanced transcript handling with proper timestamps
   const [transcriptHistory, setTranscriptHistory] = useState<Array<{
@@ -483,13 +484,13 @@ Remember your role and respond appropriately to this context.`
               <div className="flex items-center space-x-2 bg-white text-black px-3 py-1 rounded-none">
                 <div className="w-2 h-2 bg-black rounded-full animate-pulse"></div>
                 <span className="text-sm font-medium font-mono">
-                  {isUserPhase ? `${userName} SPEAKING` : `${aiName} SPEAKING`}
+                  {actualSpeaker === "user" ? `${userName} SPEAKING` : `${aiName} SPEAKING`}
                 </span>
               </div>
             )}
 
             {/* User Turn Indicator */}
-            {isUserTurn && (
+            {isUserPhase && !isSpeechActive && callStatus === CALL_STATUS.ACTIVE && (
               <div className="flex items-center space-x-2 bg-green-600 text-white px-3 py-1 rounded-none animate-pulse">
                 <CheckCircle className="w-4 h-4" />
                 <span className="text-sm font-medium font-mono">YOUR TURN TO SPEAK</span>
@@ -497,7 +498,7 @@ Remember your role and respond appropriately to this context.`
             )}
 
             {/* AI Turn Indicator */}
-            {isAITurn && !isSpeechActive && (
+            {isAIPhase && !isSpeechActive && callStatus === CALL_STATUS.ACTIVE && (
               <div className="flex items-center space-x-2 bg-yellow-600 text-white px-3 py-1 rounded-none">
                 <Bot className="w-4 h-4" />
                 <span className="text-sm font-medium font-mono">{aiName} PREPARING</span>
@@ -618,9 +619,9 @@ Remember your role and respond appropriately to this context.`
           {/* Left Panel - User */}
           <div
             className={`bg-black border-2 p-4 rounded-none transition-all h-fit ${
-              isUserPhase && isSpeechActive
+              actualSpeaker === "user"
                 ? "border-blue-500"
-                : isUserTurn
+                : isUserPhase && !isSpeechActive && callStatus === CALL_STATUS.ACTIVE
                   ? "border-green-500 shadow-lg shadow-green-500/20"
                   : "border-neutral-700"
             }`}
@@ -629,7 +630,7 @@ Remember your role and respond appropriately to this context.`
               <div className="flex items-center justify-center space-x-2">
                 <User className="w-5 h-5" />
                 <h3 className="text-lg font-bold font-mono">{userName}</h3>
-                {isUserTurn && (
+                {isUserPhase && !isSpeechActive && callStatus === CALL_STATUS.ACTIVE && (
                   <div className="flex items-center space-x-1 ml-2">
                     <CheckCircle className="w-4 h-4 text-green-400 animate-pulse" />
                     <span className="text-xs text-green-400 font-mono">YOUR TURN</span>
@@ -649,7 +650,7 @@ Remember your role and respond appropriately to this context.`
                 className={`w-full rounded-none border-2 transition-all text-sm font-mono ${
                   actualSpeaker === "user"
                     ? "bg-red-600 text-white border-red-500 animate-pulse"
-                    : isUserTurn
+                    : isUserPhase && !isSpeechActive && callStatus === CALL_STATUS.ACTIVE
                       ? "bg-green-600 text-white border-green-500 hover:bg-green-700 hover:border-green-600 animate-pulse"
                       : isUserPhase && actualSpeaker === "assistant"
                         ? "bg-orange-600 text-white border-orange-500 hover:bg-orange-700"
@@ -668,7 +669,7 @@ Remember your role and respond appropriately to this context.`
                     <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse" />
                     SPEAKING
                   </>
-                ) : isUserTurn ? (
+                ) : isUserPhase && !isSpeechActive && callStatus === CALL_STATUS.ACTIVE ? (
                   <>
                     <Mic className="w-4 h-4 mr-2" />
                     SPEAK NOW
@@ -722,6 +723,7 @@ Remember your role and respond appropriately to this context.`
                     actualSpeaker === "assistant" ? "SPEAKING" :
                     currentAssistant ? "READY" : "INACTIVE"
                   }
+                  audioLevel={audioLevel}
                   className="w-full h-full"
                 />
               </div>
@@ -731,8 +733,8 @@ Remember your role and respond appropriately to this context.`
                 {callStatus === CALL_STATUS.LOADING && "CONNECTING TO AI"}
                 {callStatus === CALL_STATUS.ACTIVE && actualSpeaker === "user" && "USER SPEAKING"}
                 {callStatus === CALL_STATUS.ACTIVE && actualSpeaker === "assistant" && "AI SPEAKING"}
-                {callStatus === CALL_STATUS.ACTIVE && !actualSpeaker && isUserTurn && "YOUR TURN"}
-                {callStatus === CALL_STATUS.ACTIVE && !actualSpeaker && isAITurn && !isAIWaiting && "AI TURN"}
+                {callStatus === CALL_STATUS.ACTIVE && !actualSpeaker && isUserPhase && "YOUR TURN"}
+                {callStatus === CALL_STATUS.ACTIVE && !actualSpeaker && isAIPhase && !isAIWaiting && "AI TURN"}
                 {callStatus === CALL_STATUS.ACTIVE && !actualSpeaker && isAIWaiting && `${aiName.toUpperCase()} WAITING - SPEAK FIRST OR PASS MIC`}
                 {callStatus === CALL_STATUS.INACTIVE && "STANDBY"}
               </div>
@@ -742,9 +744,9 @@ Remember your role and respond appropriately to this context.`
           {/* Right Panel - AI */}
           <div
             className={`bg-black border-2 p-4 rounded-none transition-all ${
-              !isUserPhase && isSpeechActive
+              actualSpeaker === "assistant"
                 ? "border-orange-500"
-                : isAITurn
+                : isAIPhase && !isSpeechActive && callStatus === CALL_STATUS.ACTIVE
                   ? "border-yellow-500 shadow-lg shadow-yellow-500/20"
                   : "border-neutral-700"
             } ${showHint ? "" : "h-fit"}`}
@@ -753,7 +755,7 @@ Remember your role and respond appropriately to this context.`
               <div className="flex items-center justify-center space-x-2">
                 <Bot className="w-5 h-5" />
                 <h3 className="text-lg font-bold font-mono">{aiName}</h3>
-                {isAITurn && !isSpeechActive && (
+                {isAIPhase && !isSpeechActive && callStatus === CALL_STATUS.ACTIVE && (
                   <div className="flex items-center space-x-1 ml-2">
                     <Clock className="w-4 h-4 text-yellow-400 animate-pulse" />
                     <span className="text-xs text-yellow-400 font-mono">NEXT</span>
@@ -777,9 +779,9 @@ Remember your role and respond appropriately to this context.`
                 }`}
               >
                 {callStatus === CALL_STATUS.LOADING ? "CONNECTING" :
-                 !isUserPhase && isSpeechActive ? "SPEAKING" :
+                 actualSpeaker === "assistant" ? "SPEAKING" :
                  isAIWaiting ? "WAITING" :
-                 isAITurn ? "PREPARING" :
+                 isAIPhase && callStatus === CALL_STATUS.ACTIVE ? "PREPARING" :
                  callStatus === CALL_STATUS.ACTIVE ? "LISTENING" : "STANDBY"}
               </div>
               <Button

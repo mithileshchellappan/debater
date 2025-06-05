@@ -60,27 +60,16 @@ export function useDebateVapi(): UseDebateVapiReturn {
 
   useEffect(() => {
     const onSpeechStart = () => {
-      console.log("🎤 Speech started");
+      console.log("🎤 Speech started - assistant is speaking");
       setIsSpeechActive(true);
       setError(null);
-      
-      // Determine who is speaking based on the last transcript message
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage && lastMessage.type === MessageTypeEnum.TRANSCRIPT) {
-        const speaker = lastMessage.role === 'user' ? 'user' : 'assistant';
-        setActualSpeaker(speaker);
-        console.log("🔊 Speaker identified from transcript:", speaker);
-      } else {
-        // Default assumption - if no recent transcript, likely assistant speaking
-        setActualSpeaker('assistant');
-        console.log("🔊 Speaker defaulted to: assistant");
-      }
+      setActualSpeaker('assistant');
     };
 
     const onSpeechEnd = () => {
-      console.log("🔇 Speech has ended");
+      console.log("🔇 Speech has ended - turn goes to user");
       setIsSpeechActive(false);
-      setActualSpeaker(null);
+      setActualSpeaker('user');
     };
 
     const onCallStartHandler = () => {
@@ -99,6 +88,9 @@ export function useDebateVapi(): UseDebateVapiReturn {
 
     const onVolumeLevel = (volume: number) => {
       setAudioLevel(volume);
+      if (volume > 0.1) { // Only log significant volume levels
+        console.log("🔊 VAPI Volume Level:", volume);
+      }
     };
 
     const onMessageUpdate = (message: Message) => {

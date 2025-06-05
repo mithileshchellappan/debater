@@ -199,7 +199,6 @@ export default function PanelSetupPage() {
             </div>
           )}
 
-          {/* Popular Resolutions - Only show if no resolution is selected */}
           {!selectedResolution && !customResolution && (
             <div className="space-y-3">
               <h3 className="text-lg font-medium text-neutral-300">Popular Resolutions</h3>
@@ -210,7 +209,7 @@ export default function PanelSetupPage() {
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <h4 className="font-semibold text-lg text-white">{item.title}</h4>
-                          <p className="text-neutral-300 mt-1">{item.resolution}</p>
+                          <p className="text-neutral-300 mt-1">oombu {item.resolution}</p>
                         </div>
                         <div className="flex space-x-2 ml-4">
                           <Button
