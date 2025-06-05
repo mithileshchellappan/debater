@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Clock, Info, RotateCcw, MicOff, FileText, User, Bot, Hand, CheckCircle, AlertTriangle, X, PhoneCall, PhoneOff } from "lucide-react"
@@ -154,11 +154,12 @@ export default function PanelDebatePage() {
   }
 
   const handleEndDebate = () => {
-    // Store debate data for analysis
-    const debateTranscript = transcriptHistory
-      .map(item => {
-        const timestamp = formatTimestamp(item.message.timestamp)
-        return `[${timestamp}] ${item.message.role.toUpperCase()}: ${item.message.transcript}`
+    const debateTranscript = messages
+      .filter(msg => msg.type === MessageTypeEnum.TRANSCRIPT && msg.transcriptType === TranscriptMessageTypeEnum.FINAL)
+      .map((msg, index) => {
+        const transcriptMsg = msg as TranscriptMessage
+        const timestamp = transcriptMsg.timestamp ? new Date(transcriptMsg.timestamp).toLocaleTimeString() : formatTime(timer)
+        return `[${timestamp}] ${transcriptMsg.role.toUpperCase()}: ${transcriptMsg.transcript}`
       })
       .join('\n')
 
@@ -204,14 +205,38 @@ export default function PanelDebatePage() {
     return "SPEAKING"
   }
 
-  // Enhanced transcript handling with proper timestamps (matching debate page)
+  // Enhanced transcript handling with proper timestamps and speaker tracking
   const [transcriptHistory, setTranscriptHistory] = useState<Array<{
     message: TranscriptMessage;
     receivedAt: number; // timestamp when message was received
+    speakerAtTime: string | null; // who was the current speaker when this message was received
   }>>([]);
   
   // Track debate start time for accurate timestamp calculation
   const [debateStartTime, setDebateStartTime] = useState<number | null>(null);
+
+  // Function to get specific speaker name for transcript display
+  const getSpeakerDisplayName = useCallback((role: string, speakerAtTime?: string | null) => {
+    if (role === 'user') {
+      return 'YOU';
+    }
+    
+    if (role === 'assistant') {
+      // Use the speaker that was active when this message was recorded
+      const speakerToCheck = speakerAtTime || currentSpeaker;
+      
+      if (speakerToCheck === 'moderator') {
+        return 'MODERATOR';
+      } else if (speakerToCheck?.startsWith('panelist_')) {
+        const panelistIndex = parseInt(speakerToCheck.split('_')[1]);
+        const panelist = aiPanelists[panelistIndex];
+        return panelist?.name?.toUpperCase() || `PANELIST ${panelistIndex + 1}`;
+      }
+      return 'ASSISTANT'; // fallback
+    }
+    
+    return role.toUpperCase();
+  }, [currentSpeaker, aiPanelists]);
 
   // Track when messages are received for proper timing
   useEffect(() => {
@@ -232,7 +257,11 @@ export default function PanelDebatePage() {
         if (!exists) {
           // Use message timestamp if available, otherwise use current time when received
           const messageTime = msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now();
-          return [...prev, { message: msg, receivedAt: messageTime }];
+          return [...prev, { 
+            message: msg, 
+            receivedAt: messageTime, 
+            speakerAtTime: currentSpeaker 
+          }];
         }
         return prev;
       });
@@ -695,16 +724,26 @@ export default function PanelDebatePage() {
             {transcriptHistory.map((item, index) => {
               const isUser = item.message.role === 'user'
               const isAI = item.message.role === 'assistant'
+              const speakerName = getSpeakerDisplayName(item.message.role, item.speakerAtTime)
+              const isModerator = speakerName === 'MODERATOR'
+              const isPanelist = speakerName.includes('PANELIST') || (speakerName !== 'MODERATOR' && speakerName !== 'YOU' && speakerName !== 'ASSISTANT')
+              
               return (
                 <div
                   key={index}
                   className={`mb-2 ${
-                    isUser ? "text-blue-300 text-right" : isAI ? "text-orange-300 text-left" : "text-neutral-300"
+                    isUser 
+                      ? "text-blue-300 text-right" 
+                      : isModerator 
+                        ? "text-purple-300 text-left"
+                        : isPanelist
+                          ? "text-orange-300 text-left"
+                          : "text-neutral-300 text-left"
                   }`}
                 >
                   <span className="text-green-400">[{formatTimestamp(item.message.timestamp)}]</span>{' '}
                   <span className="text-white">
-                    {item.message.role.toUpperCase()}: {item.message.transcript}
+                    {speakerName}: {item.message.transcript}
                   </span>
                 </div>
               )
@@ -714,8 +753,14 @@ export default function PanelDebatePage() {
             {activeTranscript && activeTranscript.transcript.length > 3 && (
               <div className="opacity-75 mb-2 transition-opacity duration-200">
                 <span className="text-green-400">[LIVE]</span>{' '}
-                <span className={`${activeTranscript.role === 'user' ? 'text-blue-200' : 'text-orange-200'}`}>
-                  {activeTranscript.role.toUpperCase()}: {activeTranscript.transcript}
+                <span className={`${
+                  activeTranscript.role === 'user' 
+                    ? 'text-blue-200' 
+                    : getSpeakerDisplayName(activeTranscript.role) === 'MODERATOR'
+                      ? 'text-purple-200'
+                      : 'text-orange-200'
+                }`}>
+                  {getSpeakerDisplayName(activeTranscript.role)}: {activeTranscript.transcript}
                 </span>
               </div>
             )}
