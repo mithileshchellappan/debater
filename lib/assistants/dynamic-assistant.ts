@@ -1,4 +1,5 @@
 import { DebateAssistantConfig, DebateContext } from "@/lib/types/conversation.type";
+import { CreateAssistantDTO } from "@vapi-ai/web/dist/api";
 
 // Lincoln-Douglas debate phases for context-aware responses
 const DEBATE_PHASES = {
@@ -82,7 +83,7 @@ function getAIWaitStrategy(phase: string, userSide: string, aiStance: string): b
   }
 }
 
-export function createLincolnDouglasAssistant(context: DebateContext): any {
+export function createLincolnDouglasAssistant(context: DebateContext): CreateAssistantDTO {
   const { resolution, userSide, currentPhase } = context;
   
   // Determine AI's role (opposite of user)
@@ -90,52 +91,90 @@ export function createLincolnDouglasAssistant(context: DebateContext): any {
   const aiStance = userSide === "affirmative" ? "negative" : "affirmative";
   const aiName = aiRole === "lincoln" ? "Lincoln" : "Douglas";
   
-  // Get current phase information
-  const phaseInfo = DEBATE_PHASES[currentPhase as keyof typeof DEBATE_PHASES];
-  
-  // Determine which phases this AI should speak in
-  const aiSpeakingPhases = aiStance === "negative" 
-    ? ["CX1", "NC", "NR"] // Negative speaks in these phases
-    : ["CX2", "1AR", "2AR"]; // Affirmative speaks in these phases
+  // Determine AI's phase behavior
+  const getAIPhaseRole = (phase: string, stance: string) => {
+    switch (phase) {
+      case "AC":
+        return stance === "affirmative" ? "speak" : "listen";
+      case "CX1":
+        return stance === "affirmative" ? "answer" : "question";
+      case "NC":
+        return stance === "negative" ? "speak" : "listen";
+      case "CX2":
+        return stance === "negative" ? "answer" : "question";
+      case "1AR":
+        return stance === "affirmative" ? "speak" : "listen";
+      case "NR":
+        return stance === "negative" ? "speak" : "listen";
+      case "2AR":
+        return stance === "affirmative" ? "speak" : "listen";
+      default:
+        return "listen";
+    }
+  };
+
+  const aiPhaseRole = getAIPhaseRole(currentPhase, aiStance);
+  const shouldAISpeak = ["speak", "question"].includes(aiPhaseRole);
+  const shouldAIWait = aiPhaseRole === "listen" || (aiPhaseRole === "question" && getAIWaitStrategy(currentPhase, userSide, aiStance));
+
+  // Helper function for contextual first message
+  const getContextualFirstMessage = (phase: string, name: string, stance: string, shouldSpeak: boolean, shouldWait: boolean): string => {
+    // If AI should wait, stay silent
+    if (shouldWait) {
+      return "";
+    }
     
-  const shouldAISpeakInCurrentPhase = aiSpeakingPhases.includes(currentPhase);
-  
-  // Determine if AI should wait for user to speak first (Lincoln speaks first rule)
-  const shouldAIWaitForUser = getAIWaitStrategy(currentPhase, userSide, aiStance);
+    // If it's not the AI's speaking phase, be ready to listen
+    if (!shouldSpeak) {
+      return `I'm ${name}, ready to debate the ${stance} position. I'm listening carefully as you present your case.`;
+    }
+    
+    // If it's the AI's speaking phase, be ready to speak
+    switch (phase) {
+      case "CX1":
+      case "CX2":
+        return `I'm ${name}, ready for cross-examination. I have some strategic questions about your position.`;
+      case "NC":
+        return `I'm ${name}, ready to present the negative case against this resolution and address your affirmative arguments.`;
+      case "NR":
+        return `I'm ${name}, ready for my final speech. I'll extend our strongest arguments and explain why the negative position should prevail.`;
+      case "1AR":
+        return `I'm ${name}, ready to rebuild the affirmative case and address your negative arguments.`;
+      case "2AR":
+        return `I'm ${name}, ready for my final affirmative speech. I'll focus on the key voting issues.`;
+      default:
+        return `I'm ${name}, ready to present the ${stance} position in this debate.`;
+    }
+  };
 
   const baseSystemPrompt = `You are ${aiName}, an expert Lincoln-Douglas debater taking the ${aiStance.toUpperCase()} position in this structured debate.
 
 DEBATE RESOLUTION: "${resolution}"
 
-CURRENT CONTEXT:
-- Phase: ${currentPhase} - ${phaseInfo?.name || "Unknown Phase"}
-- Your Role: ${aiStance.toUpperCase()} side
-- Phase Description: ${phaseInfo?.description || ""}
-- Time Allocated: ${phaseInfo ? Math.floor(phaseInfo.duration / 60) : "?"} minutes
-- Your Speaking Turn: ${shouldAISpeakInCurrentPhase ? "YES - You should speak now" : "NO - Listen and prepare"}
-- Wait Strategy: ${shouldAIWaitForUser ? "WAIT for user to speak first or pass microphone" : "Speak when appropriate"}
-
-SPEAKING PROTOCOL:
-${shouldAIWaitForUser ? 
-  `IMPORTANT: In this phase, you must WAIT for the user to either:
-1. Speak first and then pass the microphone to you (they will say something like "I pass" or "Your turn")
-2. Wait for them to finish their initial statement
-3. Wait for a timer signal indicating their time is up
-DO NOT speak immediately when the call starts. Wait for their cue or timer expiration.` :
-  `You may speak according to normal debate flow when it's your designated speaking time.`}
+INITIAL SETUP:
+- Your Role: ${aiStance.toUpperCase()} side (${aiName})
+- User Role: ${userSide.toUpperCase()} side
+- You will receive phase updates during the debate that will tell you when to speak or listen
 
 DEBATE STRUCTURE AWARENESS:
 You are in a formal Lincoln-Douglas debate with these phases:
 1. AC (6min) - Affirmative presents case
-2. CX (3min) - Negative questions Affirmative  
+2. CX1 (3min) - Negative questions Affirmative  
 3. NC (7min) - Negative presents case + refutes Affirmative
-4. CX (3min) - Affirmative questions Negative
+4. CX2 (3min) - Affirmative questions Negative
 5. 1AR (4min) - Affirmative rebuilds case
 6. NR (6min) - Negative extends arguments  
 7. 2AR (3min) - Affirmative final speech
 
-SPEAKING GUIDELINES:
-${getPhaseSpecificInstructions(currentPhase, aiStance)}
+SPEAKING PHASES FOR YOU (${aiStance.toUpperCase()}):
+${aiStance === "negative" 
+  ? "- CX1: You ask questions to the affirmative\n- NC: You present your case and refute the affirmative\n- NR: Your final rebuttal speech" 
+  : "- CX2: You ask questions to the negative\n- 1AR: You rebuild your affirmative case\n- 2AR: Your final affirmative speech"}
+
+LISTENING PHASES FOR YOU:
+${aiStance === "negative" 
+  ? "- AC: Listen to affirmative's opening case\n- CX2: Answer affirmative's questions\n- 1AR: Listen to affirmative's rebuilding\n- 2AR: Listen to affirmative's final speech" 
+  : "- AC: Your time to present opening case\n- CX1: Answer negative's questions\n- NC: Listen to negative's case\n- NR: Listen to negative's final speech"}
 
 PERSONALITY & STYLE:
 - ${aiRole === "lincoln" ? 
@@ -148,21 +187,40 @@ PERSONALITY & STYLE:
 - Directly address opponent's strongest arguments
 - Build compelling value frameworks
 
-CURRENT PHASE STRATEGY:
-${phaseInfo?.tips || "Adapt to the current debate situation"}
+IMPORTANT: You will receive system messages during the debate telling you the current phase and whether you should speak or remain silent. Follow those instructions precisely.
 
 Remember: This is a structured academic debate. Stay focused on the resolution, maintain intellectual rigor, and demonstrate strong argumentation skills.`;
 
-  // Create the assistant configuration
+  // Create the assistant configuration - contextually aware of starting phase
   return {
     name: `${aiName} - ${aiStance.charAt(0).toUpperCase() + aiStance.slice(1)} Debater`,
-    firstMessage: getFirstMessage(currentPhase, aiName, aiStance, shouldAISpeakInCurrentPhase, shouldAIWaitForUser),
-    systemMessage: baseSystemPrompt,
+    firstMessage: getContextualFirstMessage(currentPhase, aiName, aiStance, shouldAISpeak, shouldAIWait),
+    firstMessageMode: shouldAIWait ? "assistant-waits-for-user" : "assistant-speaks-first-with-model-generated-message",
+    
+    // Configure conservative speaking behavior - controlled via system messages
+    startSpeakingPlan: {
+      waitSeconds: 1.0, // Wait 1 second for user to finish
+      smartEndpointingEnabled: true,
+    },
+
+    // Configure when assistant should stop speaking
+    stopSpeakingPlan: {
+      numWords: 3, 
+      voiceSeconds: 0.2,
+      backoffSeconds: 1, 
+    },
+
     model: {
       provider: "openai",
-      model: "gpt-4o-mini",
+      model: "gpt-4o",
       temperature: 0.7,
-      maxTokens: 500, // Keep responses concise for debate format
+      maxTokens: 500,
+      messages: [
+        {
+          role: "system",
+          content: baseSystemPrompt
+        }
+      ]
     },
     voice: {
       provider: "11labs",
@@ -176,19 +234,11 @@ Remember: This is a structured academic debate. Stay focused on the resolution, 
       model: "nova-2",
       language: "en-US",
     },
-    // Configure behavior for waiting
-    ...(shouldAIWaitForUser && {
-      firstMessageTimeout: 30000, // Wait 30 seconds before speaking
-      waitForUserInput: true, // Wait for user input or manual trigger
-    }),
-    // Add debate-specific metadata
+    // Add basic metadata
     metadata: {
       debateRole: aiRole,
       stance: aiStance,
-      phase: currentPhase,
       resolution: resolution,
-      shouldSpeak: shouldAISpeakInCurrentPhase,
-      shouldWaitForUser: shouldAIWaitForUser,
     },
   };
 }
@@ -237,46 +287,96 @@ function getPhaseSpecificInstructions(phase: string, stance: "affirmative" | "ne
   }
 }
 
+// Legacy function - keeping for compatibility
 function getFirstMessage(phase: string, name: string, stance: string, shouldSpeak: boolean, shouldWait: boolean): string {
-  // If AI should wait, provide a waiting message
+  // If AI should wait, stay silent
   if (shouldWait) {
-    return `I'm ${name}, ready to debate the ${stance} position. As per debate protocol, I'm waiting for you to begin or pass the microphone to me.`;
+    return "";
   }
   
+  // If it's not the AI's speaking phase, be ready to listen
   if (!shouldSpeak) {
-    return `I'm ${name}, ready to debate the ${stance} position. I'm listening carefully to prepare for my speaking time.`;
+    return `I'm ${name}, ready to debate the ${stance} position. I'm listening carefully as you present your case.`;
   }
   
+  // If it's the AI's speaking phase, be ready to speak
   switch (phase) {
     case "CX1":
     case "CX2":
-      return `I'm ready for cross-examination. Let me ask you some strategic questions about your position.`;
+      return `I'm ${name}, ready for cross-examination. I have some strategic questions about your position.`;
     case "NC":
-      return `Thank you. I'll now present the negative case against this resolution and address the affirmative's arguments.`;
+      return `I'm ${name}, ready to present the negative case against this resolution and address your affirmative arguments.`;
     case "NR":
-      return `For my final speech, I'll extend our strongest arguments and explain why the negative position should prevail.`;
+      return `I'm ${name}, ready for my final speech. I'll extend our strongest arguments and explain why the negative position should prevail.`;
+    case "1AR":
+      return `I'm ${name}, ready to rebuild the affirmative case and address your negative arguments.`;
+    case "2AR":
+      return `I'm ${name}, ready for my final affirmative speech. I'll focus on the key voting issues.`;
     default:
       return `I'm ${name}, ready to present the ${stance} position in this debate.`;
   }
 }
 
-// Utility function to update assistant context mid-debate
-export function updateAssistantContext(assistant: any, newContext: Partial<DebateContext>) {
-  return {
-    ...assistant,
-    metadata: {
-      ...assistant.metadata,
-      ...newContext,
-    },
-    // Update system message with new context if needed
-    systemMessage: assistant.systemMessage.replace(
-      /CURRENT CONTEXT:[\s\S]*?(?=DEBATE STRUCTURE)/,
-      `CURRENT CONTEXT:
-- Phase: ${newContext.currentPhase || assistant.metadata.phase}
-- Time Remaining: ${newContext.timeRemaining ? Math.floor(newContext.timeRemaining / 60) + " minutes" : "Unknown"}
-- Updated Context: ${new Date().toLocaleTimeString()}
-
-DEBATE STRUCTURE`
-    ),
+// Function to create phase update message for vapi.send()
+export function createPhaseUpdateMessage(context: DebateContext): string {
+  const { currentPhase, userSide } = context;
+  const phaseInfo = DEBATE_PHASES[currentPhase as keyof typeof DEBATE_PHASES];
+  
+  // Determine AI's role and behavior in this phase
+  const aiStance = userSide === "affirmative" ? "negative" : "affirmative";
+  
+  const getAIPhaseRole = (phase: string, stance: string) => {
+    switch (phase) {
+      case "AC":
+        return stance === "affirmative" ? "speak" : "listen";
+      case "CX1":
+        return stance === "affirmative" ? "answer" : "question";
+      case "NC":
+        return stance === "negative" ? "speak" : "listen";
+      case "CX2":
+        return stance === "negative" ? "answer" : "question";
+      case "1AR":
+        return stance === "affirmative" ? "speak" : "listen";
+      case "NR":
+        return stance === "negative" ? "speak" : "listen";
+      case "2AR":
+        return stance === "affirmative" ? "speak" : "listen";
+      default:
+        return "listen";
+    }
   };
+
+  const aiPhaseRole = getAIPhaseRole(currentPhase, aiStance);
+  const shouldAIWait = getAIWaitStrategy(currentPhase, userSide, aiStance);
+
+  const getModeDescription = () => {
+    switch (aiPhaseRole) {
+      case "speak":
+        return shouldAIWait ? "WAIT MODE: User speaks first, then you present your speech." : "SPEAK MODE: This is your speaking phase.";
+      case "question":
+        return shouldAIWait ? "WAIT MODE: User starts, then you ask questions." : "QUESTION MODE: Ask strategic questions.";
+      case "answer":
+        return "ANSWER MODE: Respond to user's questions strategically.";
+      case "listen":
+        return "LISTEN MODE: This is not your speaking phase. Listen carefully and take notes.";
+      default:
+        return "LISTEN MODE: Default listening mode.";
+    }
+  };
+
+  return `PHASE UPDATE - ${currentPhase}: ${phaseInfo?.name || "Unknown Phase"}
+
+CURRENT PHASE INSTRUCTIONS:
+- Phase: ${currentPhase} (${phaseInfo?.description || ""})
+- Duration: ${phaseInfo ? Math.floor(phaseInfo.duration / 60) : "?"} minutes
+- Your Role: ${aiPhaseRole.toUpperCase()}
+- Behavior: ${getModeDescription()}
+
+${aiPhaseRole === "answer" ? 
+  `CROSS-EXAMINATION INSTRUCTIONS: Answer questions directly but strategically. Don't give away more than necessary. ${getPhaseSpecificInstructions(currentPhase, aiStance)}` :
+  aiPhaseRole === "speak" || aiPhaseRole === "question" ?
+    `SPEAKING INSTRUCTIONS: ${getPhaseSpecificInstructions(currentPhase, aiStance)}` :
+    `LISTENING INSTRUCTIONS: Take careful notes for when it's your turn to speak.`}
+
+Phase Tips: ${phaseInfo?.tips || "Adapt to the current situation"}`;
 } 

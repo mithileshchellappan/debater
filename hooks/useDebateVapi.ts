@@ -9,7 +9,7 @@ import {
 } from "@/lib/types/conversation.type";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { vapi } from "@/lib/vapi.sdk";
-import { createLincolnDouglasAssistant, updateAssistantContext } from "@/lib/assistants/dynamic-assistant";
+import { createLincolnDouglasAssistant, createPhaseUpdateMessage } from "@/lib/assistants/dynamic-assistant";
 
 export enum CALL_STATUS {
   INACTIVE = "inactive",
@@ -48,6 +48,10 @@ export function useDebateVapi(): UseDebateVapiReturn {
   // Keep track of current debate context
   const debateContextRef = useRef<DebateContext | null>(null);
   const assistantCacheRef = useRef<Map<string, any>>(new Map());
+  
+  // Add debouncing for partial transcripts to reduce glitching
+  const partialTranscriptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [debouncedActiveTranscript, setDebouncedActiveTranscript] = useState<TranscriptMessage | null>(null);
 
   useEffect(() => {
     const onSpeechStart = () => {
@@ -85,10 +89,34 @@ export function useDebateVapi(): UseDebateVapiReturn {
         message.type === MessageTypeEnum.TRANSCRIPT &&
         message.transcriptType === TranscriptMessageTypeEnum.PARTIAL
       ) {
-        setActiveTranscript(message);
+        // Debounce partial transcript updates to reduce glitching
+        if (partialTranscriptTimeoutRef.current) {
+          clearTimeout(partialTranscriptTimeoutRef.current);
+        }
+        
+        // Only update if transcript has meaningful content
+        if (message.transcript.trim().length > 2) {
+          partialTranscriptTimeoutRef.current = setTimeout(() => {
+            setActiveTranscript(message);
+            setDebouncedActiveTranscript(message);
+          }, 100); // 100ms debounce
+        }
       } else {
+        // Add timestamp if not provided by VAPI
+        if (message.type === MessageTypeEnum.TRANSCRIPT && !message.timestamp) {
+          message.timestamp = new Date().toISOString();
+        }
+        
         setMessages((prev) => [...prev, message]);
-        setActiveTranscript(null);
+        
+        // Clear active transcript when final message arrives
+        if (message.type === MessageTypeEnum.TRANSCRIPT) {
+          setActiveTranscript(null);
+          setDebouncedActiveTranscript(null);
+          if (partialTranscriptTimeoutRef.current) {
+            clearTimeout(partialTranscriptTimeoutRef.current);
+          }
+        }
       }
     };
 
@@ -117,30 +145,17 @@ export function useDebateVapi(): UseDebateVapiReturn {
       vapi.off("volume-level", onVolumeLevel);
       vapi.off("message", onMessageUpdate);
       vapi.off("error", onError);
+      
+      // Cleanup timeout
+      if (partialTranscriptTimeoutRef.current) {
+        clearTimeout(partialTranscriptTimeoutRef.current);
+      }
     };
   }, []);
 
-  const createOrGetAssistant = useCallback(async (context: DebateContext) => {
-    const cacheKey = `${context.userSide}-${context.currentPhase}-${context.resolution.slice(0, 50)}`;
-    
-    // Check if we have a cached assistant for this context
-    if (assistantCacheRef.current.has(cacheKey)) {
-      const cachedAssistant = assistantCacheRef.current.get(cacheKey);
-      console.log("Using cached assistant for phase:", context.currentPhase);
-      return updateAssistantContext(cachedAssistant, context);
-    }
-
-    // Create new assistant for this specific context
-    console.log("Creating new assistant for phase:", context.currentPhase);
-    const assistant = createLincolnDouglasAssistant(context);
-    
-    if (assistantCacheRef.current.size > 5) {
-      const firstKey = assistantCacheRef.current.keys().next().value as string;
-      assistantCacheRef.current.delete(firstKey);
-    }
-    assistantCacheRef.current.set(cacheKey, assistant);
-    
-    return assistant;
+  const createDebateAssistant = useCallback(async (context: DebateContext) => {
+    console.log("Creating single debate assistant for:", context.userSide);
+    return createLincolnDouglasAssistant(context);
   }, []);
 
   const startDebate = useCallback(async (context: DebateContext) => {
@@ -151,17 +166,21 @@ export function useDebateVapi(): UseDebateVapiReturn {
       // Store current context
       debateContextRef.current = context;
       
-      // Create or get appropriate assistant for this context
-      const assistant = await createOrGetAssistant(context);
+      // Create single assistant for the entire debate
+      const assistant = await createDebateAssistant(context);
       setCurrentAssistant(assistant);
       
       console.log("Starting debate with assistant:", assistant.name);
-      console.log("Phase:", context.currentPhase, "| User side:", context.userSide);
+      console.log("Initial phase:", context.currentPhase, "| User side:", context.userSide);
       
-    console.log(assistant)
       const response = await vapi.start(assistant);
-      
       console.log("Debate call started:", response);
+      
+      // Send initial phase update
+      setTimeout(() => {
+        const phaseMessage = createPhaseUpdateMessage(context);
+        sendMessage(phaseMessage, "system");
+      }, 1000);
       
     } catch (err: any) {
       console.error("Failed to start debate:", err);
@@ -169,7 +188,7 @@ export function useDebateVapi(): UseDebateVapiReturn {
       setCallStatus(CALL_STATUS.INACTIVE);
       setCurrentAssistant(null);
     }
-  }, [createOrGetAssistant]);
+  }, [createDebateAssistant]);
 
   const stopDebate = useCallback(() => {
     setCallStatus(CALL_STATUS.ENDING);
@@ -179,35 +198,16 @@ export function useDebateVapi(): UseDebateVapiReturn {
     setCurrentAssistant(null);
     setMessages([]);
     setActiveTranscript(null);
+    setDebouncedActiveTranscript(null);
+    
+    // Clear any pending partial transcript timeouts
+    if (partialTranscriptTimeoutRef.current) {
+      clearTimeout(partialTranscriptTimeoutRef.current);
+      partialTranscriptTimeoutRef.current = null;
+    }
   }, []);
 
-  const switchPhase = useCallback(async (newPhase: string, context: DebateContext) => {
-    if (callStatus !== CALL_STATUS.ACTIVE) {
-      console.warn("Cannot switch phase when call is not active");
-      return;
-    }
 
-    try {
-      console.log("Switching to phase:", newPhase);
-      
-      // Update context
-      const updatedContext = { ...context, currentPhase: newPhase };
-      debateContextRef.current = updatedContext;
-      
-      // Stop current call
-      vapi.stop();
-      
-      // Wait a moment for cleanup
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Start new call with updated context
-      await startDebate(updatedContext);
-      
-    } catch (err: any) {
-      console.error("Failed to switch phase:", err);
-      setError(err.message || "Failed to switch debate phase");
-    }
-  }, [callStatus, startDebate]);
 
   const toggleCall = useCallback(() => {
     if (callStatus === CALL_STATUS.ACTIVE) {
@@ -241,6 +241,31 @@ export function useDebateVapi(): UseDebateVapiReturn {
       console.log("Microphone passed to AI assistant");
     } else {
       console.warn("Cannot pass microphone: VAPI not active");
+    }
+  }, [callStatus, sendMessage]);
+
+  const switchPhase = useCallback(async (newPhase: string, context: DebateContext) => {
+    if (callStatus !== CALL_STATUS.ACTIVE) {
+      console.warn("Cannot switch phase when call is not active");
+      return;
+    }
+
+    try {
+      console.log("Switching to phase:", newPhase);
+      
+      // Update context
+      const updatedContext = { ...context, currentPhase: newPhase };
+      debateContextRef.current = updatedContext;
+      
+      // Send phase update to existing assistant via vapi.send
+      const phaseMessage = createPhaseUpdateMessage(updatedContext);
+      sendMessage(phaseMessage, "system");
+      
+      console.log("Phase switched to:", newPhase);
+      
+    } catch (err: any) {
+      console.error("Failed to switch phase:", err);
+      setError(err.message || "Failed to switch debate phase");
     }
   }, [callStatus, sendMessage]);
 

@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   X,
   Mic,
+  ArrowRight,
 } from "lucide-react"
 import AsciiVoiceVisualizer from "@/components/ascii-voice-visualizer"
 import NotesModal from "@/components/notes-modal"
@@ -155,6 +156,51 @@ export default function DebatePage() {
   const isUserTurn = isUserPhase && callStatus === CALL_STATUS.ACTIVE && !isSpeechActive
   const isAITurn = isAIPhase && currentAssistant
 
+  // Enhanced transcript handling with proper timestamps
+  const [transcriptHistory, setTranscriptHistory] = useState<Array<{
+    message: TranscriptMessage;
+    receivedAt: number; // timestamp when message was received
+  }>>([]);
+  
+  // Track debate start time for accurate timestamp calculation
+  const [debateStartTime, setDebateStartTime] = useState<number | null>(null);
+
+  // Track when messages are received for proper timing
+  useEffect(() => {
+    const newFinalMessages = messages.filter(msg => 
+      msg.type === MessageTypeEnum.TRANSCRIPT && 
+      msg.transcriptType === TranscriptMessageTypeEnum.FINAL
+    ) as TranscriptMessage[];
+
+    // Add any new final messages to history with received timestamp
+    newFinalMessages.forEach(msg => {
+      setTranscriptHistory(prev => {
+        // Check if this message is already in history
+        const exists = prev.some(item => 
+          item.message.transcript === msg.transcript && 
+          item.message.role === msg.role
+        );
+        
+        if (!exists) {
+          // Use message timestamp if available, otherwise use current time when received
+          const messageTime = msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now();
+          return [...prev, { message: msg, receivedAt: messageTime }];
+        }
+        return prev;
+      });
+    });
+  }, [messages]);
+
+  // Track debate start and clear transcript history when debate resets
+  useEffect(() => {
+    if (callStatus === CALL_STATUS.ACTIVE && debateStartTime === null) {
+      setDebateStartTime(Date.now());
+    } else if (callStatus === CALL_STATUS.INACTIVE) {
+      setTranscriptHistory([]);
+      setDebateStartTime(null);
+    }
+  }, [callStatus, debateStartTime]);
+
   useEffect(() => {
     const storedResolution = localStorage.getItem("debateResolution")
     const storedSide = localStorage.getItem("debateSide")
@@ -211,6 +257,23 @@ export default function DebatePage() {
     }
   }, [callStatus, currentPhaseData, isAIPhase, isTimerRunning])
 
+  // Timer-based microphone passing when AI is waiting
+  useEffect(() => {
+    let timeout: NodeJS.Timeout
+    
+    if (isAIWaiting && callStatus === CALL_STATUS.ACTIVE && timer === 0) {
+      // After 45 seconds, automatically pass the microphone
+      timeout = setTimeout(() => {
+        console.log("Auto-passing microphone after 45 seconds of waiting")
+        passMicrophone()
+      }, 45000)
+    }
+    
+    return () => {
+      if (timeout) clearTimeout(timeout)
+    }
+  }, [isAIWaiting, callStatus, timer, passMicrophone])
+
   useEffect(() => {
     // Reset hint when phase changes
     setShowHint(false)
@@ -244,6 +307,21 @@ export default function DebatePage() {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
+  }
+
+  // Format timestamp from VAPI message or elapsed debate time
+  const formatTimestamp = (timestamp?: string | number) => {
+    if (typeof timestamp === 'string' && debateStartTime) {
+      // Parse ISO timestamp and calculate elapsed time since debate start
+      const messageTime = new Date(timestamp).getTime();
+      const elapsedSeconds = Math.floor((messageTime - debateStartTime) / 1000);
+      return formatTime(Math.max(0, elapsedSeconds));
+    } else if (typeof timestamp === 'number') {
+      // Already in seconds format
+      return formatTime(timestamp);
+    }
+    // Fallback to current timer
+    return formatTime(timer);
   }
 
   const getTimeRemaining = () => {
@@ -361,11 +439,8 @@ Remember your role and respond appropriately to this context.`
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="text-center space-y-4">
-          <h1 className="text-3xl font-bold">Voice Debate Training</h1>
-          <div className="bg-neutral-900 border border-neutral-700 p-4 rounded-none">
-            <p className="text-sm text-neutral-400 mb-2">Resolution:</p>
-            <p className="font-medium text-white">{resolution}</p>
-          </div>
+          <p className="text-sm text-neutral-400 mb-2">Resolution:</p>
+          <p className="font-medium text-white">{resolution}</p>
         </div>
 
         {/* Error Display */}
@@ -587,6 +662,17 @@ Remember your role and respond appropriately to this context.`
                   </>
                 )}
               </Button>
+              
+              {/* Pass Microphone Button - Show when AI is waiting */}
+              {isAIWaiting && callStatus === CALL_STATUS.ACTIVE && (
+                <Button
+                  onClick={passMicrophone}
+                  className="w-full bg-yellow-600 text-white hover:bg-yellow-700 rounded-none border border-yellow-500 text-sm font-mono animate-pulse"
+                >
+                  <ArrowRight className="w-4 h-4 mr-2" />
+                  PASS TO {aiName.toUpperCase()}
+                </Button>
+              )}
               <Button
                 onClick={() => setIsNotesOpen(true)}
                 className="w-full bg-neutral-800 text-white hover:bg-neutral-700 rounded-none border border-neutral-600 text-sm font-mono"
@@ -615,7 +701,8 @@ Remember your role and respond appropriately to this context.`
                 {callStatus === CALL_STATUS.ACTIVE && isSpeechActive && isUserPhase && "USER SPEAKING"}
                 {callStatus === CALL_STATUS.ACTIVE && isSpeechActive && !isUserPhase && "AI SPEAKING"}
                 {callStatus === CALL_STATUS.ACTIVE && !isSpeechActive && isUserTurn && "YOUR TURN"}
-                {callStatus === CALL_STATUS.ACTIVE && !isSpeechActive && isAITurn && "AI TURN"}
+                {callStatus === CALL_STATUS.ACTIVE && !isSpeechActive && isAITurn && !isAIWaiting && "AI TURN"}
+                {callStatus === CALL_STATUS.ACTIVE && !isSpeechActive && isAIWaiting && `${aiName.toUpperCase()} WAITING - SPEAK FIRST OR PASS MIC`}
                 {callStatus === CALL_STATUS.INACTIVE && "STANDBY"}
               </div>
             </div>
@@ -649,15 +736,18 @@ Remember your role and respond appropriately to this context.`
                     ? "bg-yellow-600 text-white border-yellow-500"
                     : !isUserPhase && isSpeechActive
                       ? "bg-orange-600 text-white border-orange-500"
-                      : isAITurn
-                        ? "bg-yellow-600 text-white border-yellow-500"
-                        : callStatus === CALL_STATUS.ACTIVE
-                          ? "bg-neutral-800 text-neutral-300 border-neutral-600"
-                          : "bg-neutral-700 text-neutral-400 border-neutral-600"
+                      : isAIWaiting
+                        ? "bg-blue-600 text-white border-blue-500 animate-pulse"
+                        : isAITurn
+                          ? "bg-yellow-600 text-white border-yellow-500"
+                          : callStatus === CALL_STATUS.ACTIVE
+                            ? "bg-neutral-800 text-neutral-300 border-neutral-600"
+                            : "bg-neutral-700 text-neutral-400 border-neutral-600"
                 }`}
               >
                 {callStatus === CALL_STATUS.LOADING ? "CONNECTING" :
                  !isUserPhase && isSpeechActive ? "SPEAKING" :
+                 isAIWaiting ? "WAITING" :
                  isAITurn ? "PREPARING" :
                  callStatus === CALL_STATUS.ACTIVE ? "LISTENING" : "STANDBY"}
               </div>
@@ -686,30 +776,27 @@ Remember your role and respond appropriately to this context.`
         <div className="bg-black p-4 rounded-none">
           <div ref={transcriptRef} className="h-48 overflow-y-auto font-mono text-sm transcript-area">
             {/* Show final transcript messages */}
-            {messages.map((message, index) => {
-              if (message.type === MessageTypeEnum.TRANSCRIPT && message.transcriptType === TranscriptMessageTypeEnum.FINAL) {
-                const isUser = message.role === 'user'
-                const isAI = message.role === 'assistant'
-                return (
-                  <div
-                    key={index}
-                    className={`mb-2 ${
-                      isUser ? "text-blue-300 text-right" : isAI ? "text-orange-300 text-left" : "text-neutral-300"
-                    }`}
-                  >
-                    <span className="text-green-400">[{formatTime(timer)}]</span>{' '}
-                    <span className="text-white">
-                      {message.role.toUpperCase()}: {message.transcript}
-                    </span>
-                  </div>
-                )
-              }
-              return null
+            {transcriptHistory.map((item, index) => {
+              const isUser = item.message.role === 'user'
+              const isAI = item.message.role === 'assistant'
+              return (
+                <div
+                  key={index}
+                  className={`mb-2 ${
+                    isUser ? "text-blue-300 text-right" : isAI ? "text-orange-300 text-left" : "text-neutral-300"
+                  }`}
+                >
+                                     <span className="text-green-400">[{formatTimestamp(item.message.timestamp)}]</span>{' '}
+                   <span className="text-white">
+                     {item.message.role.toUpperCase()}: {item.message.transcript}
+                   </span>
+                </div>
+              )
             })}
             
-            {/* Show active (partial) transcript */}
-            {activeTranscript && (
-              <div className="opacity-75 mb-2">
+            {/* Show active (partial) transcript with debouncing */}
+            {activeTranscript && activeTranscript.transcript.length > 3 && (
+              <div className="opacity-75 mb-2 transition-opacity duration-200">
                 <span className="text-green-400">[LIVE]</span>{' '}
                 <span className={`${activeTranscript.role === 'user' ? 'text-blue-200' : 'text-orange-200'}`}>
                   {activeTranscript.role.toUpperCase()}: {activeTranscript.transcript}
