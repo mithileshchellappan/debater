@@ -193,6 +193,8 @@ export default function AsciiVoiceVisualizer({
 
     const ball = ballRef.current
 
+
+
     // Update target hue based on current speaker
     ball.targetHue = currentSpeaker === "user" ? 200 : currentSpeaker === "ai" ? 30 : 0
 

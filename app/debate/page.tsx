@@ -14,9 +14,9 @@ import {
   CheckCircle,
   Lightbulb,
   AlertTriangle,
-  X,
   Mic,
   ArrowRight,
+  X,
 } from "lucide-react"
 import AsciiVoiceVisualizer from "@/components/ascii-voice-visualizer"
 import NotesModal from "@/components/notes-modal"
@@ -124,6 +124,7 @@ export default function DebatePage() {
   const [showHint, setShowHint] = useState(false)
   const [currentHint, setCurrentHint] = useState<string>("")
   const [showEndWarning, setShowEndWarning] = useState(false)
+
   const transcriptRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
 
@@ -234,37 +235,30 @@ export default function DebatePage() {
     }
   }, [messages, activeTranscript])
 
-  // Initialize debate when resolution and side are available
-  useEffect(() => {
-    if (resolution && side && callStatus === CALL_STATUS.INACTIVE) {
-      const context = createDebateContext()
-      startDebate(context)
-    }
-  }, [resolution, side, callStatus])
 
-  // Send initial context only when debate starts
+  // Send initial context only when debate starts.
   useEffect(() => {
     if (callStatus === CALL_STATUS.ACTIVE && resolution && side) {
       sendDebateContext("debate_started", `Resolution: "${resolution}" | Your stance: ${side === "affirmative" ? "NEGATIVE" : "AFFIRMATIVE"}`)
     }
   }, [callStatus, resolution, side])
 
-  // Auto-start timer and handle phase transitions
+  // Auto-start timer and handle phase transitions.
   useEffect(() => {
     if (callStatus === CALL_STATUS.ACTIVE && currentPhaseData) {
       if (isAIPhase && !isTimerRunning) {
-        // AI phase - start timer automatically
+        // AI phase - start timer automatically.
         setIsTimerRunning(true)
       }
     }
   }, [callStatus, currentPhaseData, isAIPhase, isTimerRunning])
 
-  // Timer-based microphone passing when AI is waiting
+  // Timer-based microphone passing when AI is waiting.
   useEffect(() => {
     let timeout: NodeJS.Timeout
     
     if (isAIWaiting && callStatus === CALL_STATUS.ACTIVE && timer === 0) {
-      // After 45 seconds, automatically pass the microphone
+      // After 45 seconds, automatically pass the microphone.
       timeout = setTimeout(() => {
         console.log("Auto-passing microphone after 45 seconds of waiting")
         passMicrophone()
@@ -277,7 +271,7 @@ export default function DebatePage() {
   }, [isAIWaiting, callStatus, timer, passMicrophone])
 
   useEffect(() => {
-    // Reset hint when phase changes
+    // Reset hint when phase changes.
     setShowHint(false)
     const phaseCode = DEBATE_PHASES[currentPhase].code
     const hintsForPhase = DEBATE_HINTS[phaseCode as keyof typeof DEBATE_HINTS] || []
@@ -311,18 +305,18 @@ export default function DebatePage() {
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
   }
 
-  // Format timestamp from VAPI message or elapsed debate time
+  // Format timestamp from VAPI message or elapsed debate time.
   const formatTimestamp = (timestamp?: string | number) => {
     if (typeof timestamp === 'string' && debateStartTime) {
-      // Parse ISO timestamp and calculate elapsed time since debate start
+      // Parse ISO timestamp and calculate elapsed time since debate start.
       const messageTime = new Date(timestamp).getTime();
       const elapsedSeconds = Math.floor((messageTime - debateStartTime) / 1000);
       return formatTime(Math.max(0, elapsedSeconds));
     } else if (typeof timestamp === 'number') {
-      // Already in seconds format
+      // Already in seconds format.
       return formatTime(timestamp);
     }
-    // Fallback to current timer
+    // Fallback to current timer.
     return formatTime(timer);
   }
 
@@ -331,7 +325,7 @@ export default function DebatePage() {
     return Math.max(0, remaining)
   }
 
-  // Send context updates to VAPI assistant
+  // Send context updates to VAPI assistant.
   const sendDebateContext = (action: string, additionalInfo?: string) => {
     if (callStatus !== CALL_STATUS.ACTIVE) return
 
@@ -363,7 +357,7 @@ Remember your role and respond appropriately to this context.`
     console.log(`Sent context update: ${action}`, contextMessage)
   }
 
-  // Send only critical time warning
+  // Send only critical time warning.
   const sendTimeWarning = () => {
     if (callStatus !== CALL_STATUS.ACTIVE) return
     const timeLeft = getTimeRemaining()
@@ -374,7 +368,7 @@ Remember your role and respond appropriately to this context.`
 
   const toggleMicrophone = () => {
     if (callStatus !== CALL_STATUS.ACTIVE) {
-      // Start the debate if not active
+      // Start the debate if not active.
       const context = createDebateContext()
       startDebate(context)
       return
@@ -382,7 +376,7 @@ Remember your role and respond appropriately to this context.`
 
     if (isUserPhase) {
       setIsTimerRunning(true)
-      // VAPI will handle the actual voice input
+      // VAPI will handle the actual voice input.
     }
   }
 
@@ -528,17 +522,27 @@ Remember your role and respond appropriately to this context.`
           <div className="flex items-center space-x-2">
             <Button
               onClick={() => {
-                const newTimerState = !isTimerRunning
-                if (newTimerState) {
-                  sendDebateContext("timer_started", `Timer resumed at ${formatTime(timer)}`)
-                } else {
-                  sendDebateContext("timer_paused", `Timer paused at ${formatTime(timer)}`)
+                if (callStatus === CALL_STATUS.INACTIVE) {
+                  const context = createDebateContext()
+                  startDebate(context)
+                  setIsTimerRunning(true)
+                } else if (callStatus === CALL_STATUS.ACTIVE) {
+                  const newTimerState = !isTimerRunning
+                  if (newTimerState) {
+                    sendDebateContext("timer_started", `Timer resumed at ${formatTime(timer)}`)
+                  } else {
+                    sendDebateContext("timer_paused", `Timer paused at ${formatTime(timer)}`)
+                  }
+                  setIsTimerRunning(newTimerState)
                 }
-                setIsTimerRunning(newTimerState)
               }}
-              className="bg-neutral-800 text-white hover:bg-neutral-700 rounded-none border border-neutral-600 font-mono"
+              disabled={callStatus === CALL_STATUS.LOADING || callStatus === CALL_STATUS.ENDING}
+              className="bg-neutral-800 text-white hover:bg-neutral-700 rounded-none border border-neutral-600 font-mono disabled:opacity-50"
             >
-              {isTimerRunning ? "PAUSE" : "START"}
+              {callStatus === CALL_STATUS.INACTIVE ? "START" : 
+               callStatus === CALL_STATUS.LOADING ? "CONNECTING..." :
+               callStatus === CALL_STATUS.ENDING ? "ENDING..." :
+               isTimerRunning ? "PAUSE" : "RESUME"}
             </Button>
             <Button
               onClick={() => {
@@ -558,13 +562,22 @@ Remember your role and respond appropriately to this context.`
               RESET
             </Button>
             <Button
-              onClick={() => setShowEndWarning(true)}
-              className="bg-red-600 text-white hover:bg-red-700 rounded-none border border-red-500 font-mono"
+              onClick={() => {
+                if (callStatus === CALL_STATUS.ACTIVE) {
+                  setShowEndWarning(true)
+                } else {
+                  resetDebate()
+                }
+              }}
+              disabled={callStatus === CALL_STATUS.LOADING || callStatus === CALL_STATUS.ENDING}
+              className="bg-red-600 text-white hover:bg-red-700 rounded-none border border-red-500 font-mono disabled:opacity-50"
             >
               <AlertTriangle className="w-4 h-4 mr-2" />
-              END
+              {callStatus === CALL_STATUS.ACTIVE ? "END DEBATE" : 
+               callStatus === CALL_STATUS.ENDING ? "ENDING..." : 
+               "RESET"}
             </Button>
-          </div>
+                    </div>
         </div>
 
         {/* End Debate Warning Modal */}
@@ -626,7 +639,6 @@ Remember your role and respond appropriately to this context.`
               <p className="text-xs text-neutral-400 font-mono">{userStance}</p>
               <Button
                 onClick={() => {
-                  // If it's user phase and AI is speaking, interrupt the assistant
                   if (isUserPhase && actualSpeaker === "assistant") {
                     interruptAssistant();
                   } else {
@@ -679,7 +691,6 @@ Remember your role and respond appropriately to this context.`
                 )}
               </Button>
               
-              {/* Pass Microphone Button - Show when AI is waiting */}
               {isAIWaiting && callStatus === CALL_STATUS.ACTIVE && (
                 <Button
                   onClick={passMicrophone}
@@ -706,7 +717,11 @@ Remember your role and respond appropriately to this context.`
                 <AsciiVoiceVisualizer
                   isActive={callStatus === CALL_STATUS.ACTIVE}
                   currentSpeaker={actualSpeaker === "user" ? "user" : actualSpeaker === "assistant" ? "ai" : null}
-                  aiStatus={callStatus === CALL_STATUS.LOADING ? "THINKING..." : currentAssistant ? "READY" : "INACTIVE"}
+                  aiStatus={
+                    callStatus === CALL_STATUS.LOADING ? "THINKING..." :
+                    actualSpeaker === "assistant" ? "SPEAKING" :
+                    currentAssistant ? "READY" : "INACTIVE"
+                  }
                   className="w-full h-full"
                 />
               </div>

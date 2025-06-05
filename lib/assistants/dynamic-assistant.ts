@@ -223,7 +223,7 @@ Debate with passion and precision. Make every word count, and speak like the ide
           type: "customer",
           regex: "(\\?|do you|can you|would you|is it true|don't you think|wouldn't you agree)",
           regexOptions: [{ type: "ignore-case", enabled: true }],
-          timeoutSeconds: 2.0 // Quick response expected for direct questions
+          timeoutSeconds: 1.0 // Quick response expected for direct questions
         },
 
         // Rule 4: Very long timeout for reading evidence/quotes

@@ -23,8 +23,8 @@ import {
 
 // Mock data - in a real app this would come from the debate session
 const MOCK_ANALYSIS_DATA = {
-  debateType: "lincoln-douglas", // or "panel"
-  resolution: "Resolved: The benefits of artificial intelligence outweigh the risks to personal privacy.",
+  debateType: "lincoln-douglas",
+  resolution: "The benefits of artificial intelligence outweigh the risks to personal privacy.",
   participants: {
     user: { name: "LINCOLN", side: "AFFIRMATIVE", stance: "Supporting AI benefits" },
     ai: { name: "DOUGLAS", side: "NEGATIVE", stance: "Protecting privacy rights" },

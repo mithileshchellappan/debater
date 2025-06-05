@@ -60,22 +60,25 @@ export function useDebateVapi(): UseDebateVapiReturn {
 
   useEffect(() => {
     const onSpeechStart = () => {
-      console.log("Speech started");
+      console.log("🎤 Speech started");
       setIsSpeechActive(true);
       setError(null);
       
       // Determine who is speaking based on the last transcript message
       const lastMessage = messages[messages.length - 1];
       if (lastMessage && lastMessage.type === MessageTypeEnum.TRANSCRIPT) {
-        setActualSpeaker(lastMessage.role === 'user' ? 'user' : 'assistant');
+        const speaker = lastMessage.role === 'user' ? 'user' : 'assistant';
+        setActualSpeaker(speaker);
+        console.log("🔊 Speaker identified from transcript:", speaker);
       } else {
         // Default assumption - if no recent transcript, likely assistant speaking
         setActualSpeaker('assistant');
+        console.log("🔊 Speaker defaulted to: assistant");
       }
     };
 
     const onSpeechEnd = () => {
-      console.log("Speech has ended");
+      console.log("🔇 Speech has ended");
       setIsSpeechActive(false);
       setActualSpeaker(null);
     };
@@ -107,7 +110,9 @@ export function useDebateVapi(): UseDebateVapiReturn {
       ) {
         // Update speaker tracking for partial transcripts
         if (isSpeechActive) {
-          setActualSpeaker(message.role === 'user' ? 'user' : 'assistant');
+          const speaker = message.role === 'user' ? 'user' : 'assistant';
+          setActualSpeaker(speaker);
+          console.log("🔊 Speaker updated from partial transcript:", speaker, "Content:", message.transcript.substring(0, 30) + "...");
         }
         
         // Debounce partial transcript updates to reduce glitching
