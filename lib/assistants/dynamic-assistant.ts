@@ -207,7 +207,7 @@ Debate with passion and precision. Make every word count, and speak like the ide
           type: "customer",
           regex: "(first|second|third|furthermore|additionally|moreover|however|therefore|because|since|given that|the evidence shows|studies indicate|according to|research demonstrates|my contention|my framework|value of|criterion|standard)",
           regexOptions: [{ type: "ignore-case", enabled: true }],
-          timeoutSeconds: 8.0 // Allow 8 seconds for developing arguments
+          timeoutSeconds: 5.0 // Allow 8 seconds for developing arguments
         },
 
         // Rule 2: Longer timeout for cross-examination substantive responses
@@ -215,7 +215,7 @@ Debate with passion and precision. Make every word count, and speak like the ide
           type: "customer",
           regex: "(well|so|um|uh|the answer is|that's because|you see|what I mean is|let me explain|the reason|my position|evidence suggests)",
           regexOptions: [{ type: "ignore-case", enabled: true }],
-          timeoutSeconds: 6.0 // Allow 6 seconds for thoughtful responses
+          timeoutSeconds: 3.0 // Allow 6 seconds for thoughtful responses
         },
 
         // Rule 3: Shorter timeout for direct questions (cross-ex phase)
@@ -231,7 +231,7 @@ Debate with passion and precision. Make every word count, and speak like the ide
           type: "customer",
           regex: "(according to|as stated by|the author states|the study found|research shows|data indicates|statistics show|quote|the text says)",
           regexOptions: [{ type: "ignore-case", enabled: true }],
-          timeoutSeconds: 12.0 // Allow time to read evidence fully
+          timeoutSeconds: 3.0 // Allow time to read evidence fully
         },
 
         // Rule 5: Phase-specific timeouts based on AI's last message about current phase
@@ -247,7 +247,7 @@ Debate with passion and precision. Make every word count, and speak like the ide
           type: "assistant",
           regex: "CONSTRUCTIVE|AC|NC|1AR|NR|2AR",
           regexOptions: [{ type: "ignore-case", enabled: true }],
-          timeoutSeconds: 7.0 // Constructive speeches need more time
+          timeoutSeconds: 3.0 // Constructive speeches need more time
         }
       ]
     },

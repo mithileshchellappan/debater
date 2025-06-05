@@ -244,15 +244,14 @@ export default function DebatePage() {
     }
   }, [callStatus, resolution, side])
 
-  // Auto-start timer and handle phase transitions.
+  // Auto-start timer for both user and AI phases.
   useEffect(() => {
-    if (callStatus === CALL_STATUS.ACTIVE && currentPhaseData) {
-      if (isAIPhase && !isTimerRunning) {
-        // AI phase - start timer automatically.
-        setIsTimerRunning(true)
-      }
+    if (callStatus === CALL_STATUS.ACTIVE && currentPhaseData && !isTimerRunning) {
+      // Start timer automatically for any phase when debate is active
+      setIsTimerRunning(true)
+      console.log(`Auto-starting timer for phase: ${currentPhaseData.code}`)
     }
-  }, [callStatus, currentPhaseData, isAIPhase, isTimerRunning])
+  }, [callStatus, currentPhaseData, currentPhase, isTimerRunning])
 
   // Timer-based microphone passing when AI is waiting.
   useEffect(() => {
@@ -392,7 +391,6 @@ Remember your role and respond appropriately to this context.`
       
       setCurrentPhase(newPhaseIndex)
       setTimer(0)
-      setIsTimerRunning(false)
       setShowHint(false)
 
       // Switch VAPI assistant to new phase
