@@ -52,7 +52,7 @@ export default function AsciiVoiceVisualizer({
 
   const addParticles = (intensity: number, canvas: HTMLCanvasElement) => {
     const ball = ballRef.current
-    const particleCount = Math.floor(intensity * 3) // Reduced from 5 to 3
+    const particleCount = Math.floor(intensity * 5) // Reduced from 5 to 3
 
     for (let i = 0; i < particleCount; i++) {
       const angle = Math.random() * Math.PI * 2

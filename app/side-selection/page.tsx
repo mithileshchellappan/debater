@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ArrowRight } from "lucide-react"
+import lincoln from "@/assets/lincoln.png"
+import douglas from "@/assets/douglas.png"
 
 export default function SideSelectionPage() {
   const [selectedSide, setSelectedSide] = useState<"affirmative" | "negative" | null>(null)
@@ -23,36 +25,6 @@ export default function SideSelectionPage() {
       router.push("/debate")
     }
   }
-
-  const lincolnAscii = `
-    ████████████████████████████████
-    ██                            ██
-    ██    ████████████████████    ██
-    ██    ██              ██    ██
-    ██    ██    ████████  ██    ██
-    ██    ██    ██    ██  ██    ██
-    ██    ██    ██    ██  ██    ██
-    ██    ██    ████████  ██    ██
-    ██    ██              ██    ██
-    ██    ████████████████████    ██
-    ██                            ██
-    ████████████████████████████████
-  `
-
-  const douglasAscii = `
-    ████████████████████████████████
-    ██                            ██
-    ██    ████████████████████    ██
-    ██    ██              ██    ██
-    ██    ██  ████████    ██    ██
-    ██    ██  ██    ██    ██    ██
-    ██    ██  ██    ██    ██    ██
-    ██    ██  ████████    ██    ██
-    ██    ██              ██    ██
-    ██    ████████████████████    ██
-    ██                            ██
-    ████████████████████████████████
-  `
 
   return (
     <div className="min-h-screen bg-black text-white p-4">
@@ -76,8 +48,8 @@ export default function SideSelectionPage() {
             }`}
             onClick={() => setSelectedSide("affirmative")}
           >
-            <div className="text-center space-y-6">
-              <div className="text-xs font-mono leading-none whitespace-pre">{lincolnAscii}</div>
+            <div className="text-center space-y-6 bg-gray-900">
+            <img src={lincoln.src} alt="Abraham Lincoln" className="w-1/2 mx-auto" />
               <div className="space-y-2">
                 <h2 className="text-2xl font-bold">ABRAHAM LINCOLN</h2>
                 <p className="text-lg font-semibold">AFFIRMATIVE</p>
@@ -99,7 +71,7 @@ export default function SideSelectionPage() {
             onClick={() => setSelectedSide("negative")}
           >
             <div className="text-center space-y-6">
-              <div className="text-xs font-mono leading-none whitespace-pre">{douglasAscii}</div>
+              <img src={douglas.src} alt="Stephen Douglas" className="w-1/2 mx-auto" />
               <div className="space-y-2">
                 <h2 className="text-2xl font-bold">STEPHEN DOUGLAS</h2>
                 <p className="text-lg font-semibold">NEGATIVE</p>

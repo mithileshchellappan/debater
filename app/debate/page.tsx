@@ -568,13 +568,12 @@ Remember your role and respond appropriately to this context.`
                   resetDebate()
                 }
               }}
+              hidden={callStatus === CALL_STATUS.INACTIVE}
               disabled={callStatus === CALL_STATUS.LOADING || callStatus === CALL_STATUS.ENDING}
               className="bg-red-600 text-white hover:bg-red-700 rounded-none border border-red-500 font-mono disabled:opacity-50"
             >
               <AlertTriangle className="w-4 h-4 mr-2" />
-              {callStatus === CALL_STATUS.ACTIVE ? "END DEBATE" : 
-               callStatus === CALL_STATUS.ENDING ? "ENDING..." : 
-               "RESET"}
+              END DEBATE
             </Button>
                     </div>
         </div>
