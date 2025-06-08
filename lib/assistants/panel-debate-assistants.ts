@@ -1,5 +1,7 @@
 import { CreateAssistantDTO, CreateSquadDTO } from "@vapi-ai/web/dist/api";
 
+const MAX_DURATION = 3600 // 1 hour
+
 // Panel debate phases for context-aware responses
 export const PANEL_PHASES = {
   INTRO: {
@@ -21,7 +23,7 @@ export const PANEL_PHASES = {
     tips: "Engage with others' points, build on ideas, challenge respectfully"
   },
   QA: {
-    name: "Q&A Session",
+    name: "Question and Answer Session",
     duration: 600,
     description: "10 minutes - Structured questions and answers",
     tips: "Use hand-raising system, ask clarifying questions"
@@ -39,7 +41,6 @@ export const PANEL_PHASES = {
     tips: "Synthesize key points, thank participants"
   }
 };
-
 export interface PanelistConfig {
   name: string;
   archetype: string;
@@ -146,18 +147,40 @@ CONVERSATION MANAGEMENT:
 - Keep energy and engagement high
 - Ensure balanced participation
 
-TRANSFER PROTOCOL [TASK]:
+TRANSFER PROTOCOL:
 ${context.aiPanelists.map(p => `- Transfer to ${p.name}: when you want their ${p.archetype} perspective`).join('\n')}
-trigger the 'transferCall' tool to transfer to AI panelists. DO NOT SAY 'transferCall' in your response. It should be natural 
-trigger the 'transferToUser' tool to transfer to the user
 
-When User raises their hand:
-- Acknowledge them and then trigger the 'transferToUser' tool to give them the floor
+For AI Panelists: Trigger the 'transferCall' tool naturally without saying 'transferCall' in your response.
 
-DO NOT TRANSFER:
-- Immediately after user interruptions (you handle the transition)
-- When the user is actively engaged in conversation with you
-- During Q&A when you're asking specific questions
+For User: Trigger the 'transferToUser' tool AFTER you've directly addressed the user with a question or invitation. Always engage the user first, then trigger the tool.
+
+TRANSFER EXAMPLES:
+
+Example 1 - Seeking User Input:
+- You (moderator): "That raises an important question about implementation. User, based on your experience, what challenges do you think we'd face in practice?"
+[trigger the 'transferToUser' tool]
+- User: [responds]
+- You (moderator): "Thank you, that's insightful. [Panelist Name], how does that align with your perspective?"
+
+Example 2 - User Raises Hand:
+[user raises their hand]
+- You (moderator): "Yes, user, I can see you want to respond to that. What's your take?"
+[trigger the 'transferToUser' tool]  
+- User: [speaks]
+- You (moderator): "Great point about X. [Panelist Name], how do you respond to that argument?"
+[trigger the 'transferCall' tool]
+
+Example 3 - Following Up on User's Previous Point:
+- You (moderator): "User, you seemed to have a reaction to that argument. What's your perspective - do you agree or see it differently?"
+[trigger the 'transferToUser' tool]
+- User: [responds]
+- You (moderator): "Interesting perspective. Let me bring in [Panelist Name] to respond to that."
+
+CRITICAL TRANSFER TIMING:
+- ALWAYS engage the user with a direct question, invitation, or acknowledgment BEFORE triggering transferToUser
+- The user should know exactly what you want them to address
+- Never trigger the tool without first giving the user context for why you're giving them the floor
+- After the user speaks and you resume, acknowledge their contribution before moving to the next panelist
 
 MODERATOR LANGUAGE:
 - "That's an interesting point about X. [Name], how do you see this?"
@@ -168,13 +191,13 @@ MODERATOR LANGUAGE:
 
 CRITICAL: You are the conversation director. AI panelists should never manage transitions, speaking order, or user participation. That's exclusively your job.
 
-Remember: Create a dynamic, engaging discussion where the user feels like an equal participant alongside the AI panelists.`;
+Remember: Create a dynamic, engaging discussion where the user feels like an equal participant alongside the AI panelists`;
 
   return {
     name: `Moderator`,
     firstMessage: "", // Empty for silent transfers
     firstMessageMode: "assistant-speaks-first-with-model-generated-message",
-
+    maxDurationSeconds: MAX_DURATION,
     startSpeakingPlan: {
       waitSeconds: 0.8,
       smartEndpointingEnabled: 'livekit',
@@ -213,10 +236,11 @@ Remember: Create a dynamic, engaging discussion where the user feels like an equ
       ],
       tools: [
         {
-          "type": "function",
-          "function": {
-            "name": "transferToUser",
-            "description": "Transfer to the user",
+          type: "function",
+          async: true,
+          function: {
+            name: "transferToUser",
+            description: "Transfer to the user",
           }
         }
       ]
@@ -314,7 +338,7 @@ Remember: You're here to passionately argue your perspective, not to facilitate.
   return {
     name: `${panelist.name}`,
     firstMessageMode: "assistant-speaks-first-with-model-generated-message",
-
+    maxDurationSeconds: MAX_DURATION,
     startSpeakingPlan: {
       waitSeconds: 1.0,
       smartEndpointingEnabled: 'livekit',
@@ -339,7 +363,6 @@ Remember: You're here to passionately argue your perspective, not to facilitate.
         }
       ]
     },
-
     stopSpeakingPlan: {
       numWords: 2,
       voiceSeconds: 0.3,
@@ -359,10 +382,11 @@ Remember: You're here to passionately argue your perspective, not to facilitate.
       ],
       tools: [
         {
-          "type": "function",
-          "function": {
-            "name": "raiseHand",
-            "description": "Raise your hand to request the floor to speak",
+          type: "function",
+          async: true,
+          function: {
+            name: "raiseHand",
+            description: "Raise your hand to request the floor to speak",
           }
         }
       ]

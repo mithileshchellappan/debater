@@ -130,14 +130,18 @@ export default function PanelDebatePage() {
       // User is currently speaking or it's their turn
       sendMessage("The user would like to yield the floor back to the moderator.", "system")
     } else {
-      // Request to speak
-      sendMessage("The user would like to request the floor to speak.", "system")
+     requestToSpeak()
     }
   }
 
   const requestToSpeak = () => {
     if (callStatus === CALL_STATUS.ACTIVE) {
-      sendMessage("The user is raising their hand to request permission to speak.", "system")
+      if(currentSpeaker !== "moderator") {
+        sendMessage("The user would like to request the floor to speak. Acknowledge the request and then trigger the 'transferCall' tool to Moderator", "system")
+      }
+      else {
+        sendMessage("The user would like to request the floor to speak. Acknowledge the request and then trigger the 'transferToUser' tool", "system")
+      }
     }
   }
 
@@ -315,8 +319,8 @@ export default function PanelDebatePage() {
             <div className="bg-yellow-900 border border-yellow-500 p-2 rounded-none text-xs">
               <p className="text-yellow-200">Debug: currentSpeaker = {currentSpeaker || "null"}</p>
               <p className="text-yellow-200">Debug: isUserTurn = {isUserTurn ? "true" : "false"}</p>
-              <p className="text-yellow-200">Debug: isUserTurn = {isUserTurn ? "true" : "false"}</p>
-              <p className="text-yellow-200">UI Priority: {currentSpeaker === "user" ? "USER SPEAKING" : currentSpeaker ? `AI: ${currentSpeaker}` : "NONE"}</p>
+              <p className="text-yellow-200">Debug: isSpeechActive = {isSpeechActive ? "true" : "false"}</p>
+              <p className="text-yellow-200">Speaking Flow: {isSpeechActive ? "AI SPEAKING" : isUserTurn ? "USER CAN SPEAK" : "WAITING FOR NEXT SPEAKER"}</p>
             </div>
           )}
         </div>
@@ -361,7 +365,7 @@ export default function PanelDebatePage() {
                 </div>
               )}
 
-              {isCallActive && isUserTurn && !currentSpeaker && (
+              {isCallActive && (currentSpeaker === "user" || isUserTurn) && (
                 <div className="flex items-center space-x-2 bg-green-600 text-white px-3 py-1 rounded-none animate-pulse">
                   <CheckCircle className="w-4 h-4" />
                   <span className="text-sm font-medium font-mono">YOUR TURN TO SPEAK</span>
@@ -556,7 +560,7 @@ export default function PanelDebatePage() {
                       <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
                       <span className="text-xs text-blue-400 font-mono">SPEAKING</span>
                     </div>
-                  ) : isUserTurn && currentSpeaker !== "moderator" && (!currentSpeaker || !currentSpeaker.startsWith("panelist_")) && (
+                  ) : (currentSpeaker === "user" || isUserTurn) && (
                     <div className="flex items-center space-x-1">
                       <CheckCircle className="w-4 h-4 text-green-400 animate-pulse" />
                       <span className="text-xs text-green-400 font-mono">YOUR TURN</span>
@@ -583,7 +587,7 @@ export default function PanelDebatePage() {
                   className={`w-full rounded-none border-2 transition-all text-xs font-mono ${
                     currentSpeaker === "user"
                       ? "bg-red-600 text-white border-red-500 animate-pulse"
-                      : isUserTurn
+                      : (currentSpeaker === "user" || isUserTurn)
                         ? "bg-green-600 text-white border-green-500 hover:bg-green-700 hover:border-green-600 animate-pulse"
                         : isCallActive
                           ? "bg-neutral-800 text-white border-neutral-600 hover:bg-blue-600 hover:border-blue-500"
@@ -595,7 +599,7 @@ export default function PanelDebatePage() {
                       <div className="w-2 h-2 bg-white rounded-full mr-2 animate-pulse" />
                       SPEAKING
                     </>
-                  ) : isUserTurn ? (
+                  ) : (currentSpeaker === "user" || isUserTurn) ? (
                     <>
                       <CheckCircle className="w-3 h-3 mr-2" />
                       SPEAK NOW
@@ -620,13 +624,13 @@ export default function PanelDebatePage() {
                     onClick={requestToSpeak}
                     disabled={!isCallActive || currentSpeaker === "user" || isUserTurn}
                     className={`rounded-none border border-neutral-600 text-xs font-mono transition-all ${
-                      !isCallActive || currentSpeaker === "user" || isUserTurn
+                      !isCallActive || currentSpeaker === "user" || (currentSpeaker === "user" || isUserTurn)
                         ? "bg-neutral-700 text-neutral-500 border-neutral-600 cursor-not-allowed"
                         : "bg-neutral-800 text-white hover:bg-neutral-700"
                     }`}
                   >
                     <Hand className="w-3 h-3 mr-1" />
-                    {isUserTurn ? "READY" : "REQUEST"}
+                    {(currentSpeaker === "user" || isUserTurn) ? "READY" : "REQUEST"}
                   </Button>
                 </div>
               </div>

@@ -3,6 +3,7 @@
 import {
   Message,
   MessageTypeEnum,
+  ToolCallMessage,
   TranscriptMessage,
   TranscriptMessageTypeEnum,
 } from "@/lib/types/conversation.type";
@@ -94,8 +95,6 @@ export interface UsePanelDebateVapiReturn {
   error: string | null;
 }
 
-// Local PANEL_PHASE enum for compatibility (will be removed when UI is updated)
-// TODO: Update UI components to use the PANEL_PHASES from assistants file
 
 export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
   const [isSpeechActive, setIsSpeechActive] = useState(false);
@@ -106,7 +105,13 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
   const [error, setError] = useState<string | null>(null);
   
   // Panel-specific state
-  const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
+  const [currentSpeaker, setCurrentSpeakerRaw] = useState<string | null>(null);
+  
+  // Wrapper to log all speaker changes
+  const setCurrentSpeaker = useCallback((speaker: string | null) => {
+    console.log("🎯 SPEAKER CHANGE:", currentSpeaker, "→", speaker);
+    setCurrentSpeakerRaw(speaker);
+  }, [currentSpeaker]);
   const [squadMembers, setSquadMembers] = useState<SquadMember[]>([]);
   const [raisedHands, setRaisedHands] = useState<RaisedHand[]>([]);
   const [currentPhase, setCurrentPhase] = useState<keyof typeof PANEL_PHASES>("INTRO");
@@ -115,19 +120,56 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
   // Refs for managing context
   const panelContextRef = useRef<PanelContext | null>(null);
   const partialTranscriptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastAiSpeakerRef = useRef<string | null>(null);
+  const pendingUserTransferRef = useRef<boolean>(false);
 
   // Stable event handlers using useCallback
   const onSpeechStart = useCallback(() => {
     console.log("🎤 Panel Speech started - assistant is speaking");
+    console.log("🔍 onSpeechStart state: currentSpeaker =", currentSpeaker, "lastAiSpeaker =", lastAiSpeakerRef.current, "pendingUserTransfer =", pendingUserTransferRef.current);
     setIsSpeechActive(true);
     setError(null);
     setIsUserTurn(false);
+    
+    // If AI is speaking, ensure currentSpeaker reflects the actual AI speaker
+    // This handles cases where transferToUser was called but AI is still speaking
+    if (lastAiSpeakerRef.current && lastAiSpeakerRef.current !== "user") {
+      console.log("🔄 AI still speaking after transferToUser, correcting speaker to:", lastAiSpeakerRef.current);
+      setCurrentSpeaker(lastAiSpeakerRef.current);
+      
+      // Update squad member active states to reflect actual speaker
+      setSquadMembers(prev => prev.map(member => ({
+        ...member,
+        isActive: member.assistantId === lastAiSpeakerRef.current
+      })));
+    } else {
+      console.log("⚠️ No correction needed - lastAiSpeaker:", lastAiSpeakerRef.current);
+    }
   }, []);
 
   const onSpeechEnd = useCallback(() => {
-    console.log("🔇 Panel Speech ended - turn goes to user");
+    console.log("🔇 Panel Speech ended");
+    console.log("🔍 Checking pendingUserTransferRef:", pendingUserTransferRef.current);
     setIsSpeechActive(false);
-    setIsUserTurn(true);
+    
+    // Only transfer to user if there's a pending user transfer
+    if (pendingUserTransferRef.current) {
+      console.log("✅ Pending user transfer detected - giving floor to user");
+      setIsUserTurn(true);
+      setCurrentSpeaker("user");
+      setSquadMembers(prev => prev.map(member => ({
+        ...member,
+        isActive: member.assistantId === "user"
+      })));
+      pendingUserTransferRef.current = false; // Clear the pending flag
+      console.log("🏁 Cleared pendingUserTransferRef to FALSE");
+    } else {
+      console.log("⏳ No pending user transfer - waiting for next speaker assignment");
+      setTimeout(() => {
+        setIsUserTurn(true);
+        setCurrentSpeaker("user");
+      }, 2000);
+    }
   }, []);
 
   const onCallStart = useCallback(() => {
@@ -149,10 +191,37 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
   }, []);
 
   const onMessageUpdate = useCallback((message: ExtendedMessage) => {
-    console.log("Panel message received:", message.type);
-
-    if((message.type === 'transfer-update') || (message.type === MessageTypeEnum.CONVERSATION_UPDATE)) {
-      console.log("Panel message received:", message.type, message);
+    // Only log tool calls and transfer updates to reduce noise
+    if(message.type === MessageTypeEnum.TOOL_CALLS || message.type === MessageTypeEnum.TRANSFER_UPDATE || (message as any).role === "tool_calls") {
+      console.log("📨 Important message:", message);
+    }
+    
+    if(message.type === MessageTypeEnum.TOOL_CALLS) {
+      console.log("🔄 Tool call detected:", message);
+    }
+    
+    // Debug: Check for tool calls with different type checks
+    if ((message as any).role === "tool_calls" || (message as any).toolCalls) {
+      console.log("🔧 Alternative tool call detection:", message);
+      
+      // Handle tool calls with role-based detection
+      const toolCalls = (message as any).toolCalls;
+      if (toolCalls && Array.isArray(toolCalls)) {
+        console.log("🔧 Tool calls detected via role:", toolCalls.map((tc: any) => tc.function?.name));
+        toolCalls.forEach((toolCall: any) => {
+          const functionName = toolCall.function?.name;
+          console.log("🔧 Processing tool call via role:", functionName);
+          
+          if (functionName === "transferToUser") {
+            console.log("🎤 Transfer to user detected via role - preparing for user turn");
+            console.log("🔍 Current state before transferToUser: speaker =", currentSpeaker, "isUserTurn =", isUserTurn, "isSpeechActive =", isSpeechActive);
+            pendingUserTransferRef.current = true;
+            console.log("🏁 Set pendingUserTransferRef to TRUE via role");
+            // DO NOT change currentSpeaker here - let speech events handle it
+            console.log("⚠️ NOT changing currentSpeaker immediately - waiting for speechEnd");
+          }
+        });
+      }
     }
     
     // Handle transfer updates to switch current speaker
@@ -169,7 +238,7 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
         
         if (destinationAssistantName === "Moderator") {
           newSpeaker = "moderator";
-        } else if (destinationAssistantName.startsWith("Panelist")) {
+        } else if (destinationAssistantName) {
           // Find the panelist by name in the context
           const panelists = panelContextRef.current?.aiPanelists || [];
           console.log("🔍 Looking for panelist:", destinationAssistantName, "in:", panelists.map(p => p.name));
@@ -187,6 +256,15 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
           setCurrentSpeaker(newSpeaker);
           setIsUserTurn(false); // AI is now speaking
           
+          // Clear any pending user transfer since AI-to-AI transfer happened
+          if (pendingUserTransferRef.current) {
+            console.log("🚫 Clearing pending user transfer due to AI-to-AI transfer");
+            pendingUserTransferRef.current = false;
+          }
+          
+          // Track the last AI speaker for speech event handling
+          lastAiSpeakerRef.current = newSpeaker;
+          
           // Update squad member active states
           setSquadMembers(prev => prev.map(member => ({
             ...member,
@@ -198,38 +276,51 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     }
     
     // Handle tool calls for hand-raising and moderation - simplified to avoid dependency issues
-    if (message.type === MessageTypeEnum.FUNCTION_CALL) {
-      const functionCallMessage = message as FunctionCallMessageExtended;
-      if (functionCallMessage.toolCalls) {
-        functionCallMessage.toolCalls.forEach((toolCall: any) => {
+    if (message.type === MessageTypeEnum.TOOL_CALLS) {
+      const toolCallMessage = message as ToolCallMessage;
+      if (toolCallMessage.toolCalls) {
+        console.log("🔧 Tool calls detected:", toolCallMessage.toolCalls.map(tc => tc.function.name));
+        toolCallMessage.toolCalls.forEach((toolCall: any) => {
           const { name, arguments: args } = toolCall.function;
+          console.log("🔧 Processing tool call:", name, args);
 
           switch (name) {
-            case "raise_hand":
-              const handRaise: RaisedHand = {
-                panelistId: functionCallMessage.role || "unknown",
-                panelistName: functionCallMessage.role || "unknown", // Simplified to avoid squadMembers dependency
-                questionType: args.questionType,
-                targetSpeaker: args.targetSpeaker,
-                urgency: args.urgency,
-                preview: args.preview,
-                timestamp: Date.now()
-              };
-              setRaisedHands(prev => [...prev, handRaise]);
-              console.log("🙋‍♂️ Hand raised:", handRaise);
+            case "transferToUser":
+              console.log("🎤 Transfer to user detected - preparing for user turn");
+              // Set pending user transfer flag
+              pendingUserTransferRef.current = true;
+              console.log("🏁 Set pendingUserTransferRef to TRUE");
+              // Don't immediately set speaker to user - let speech events handle the transition
+              // The AI might still be speaking to acknowledge the transfer
+              // Actual speaker change happens on speechEnd when pending flag is checked
+              console.log("⏳ Awaiting AI to finish speaking before user turn");
               break;
 
-            case "change_phase":
-              const newPhase = args.newPhase as keyof typeof PANEL_PHASES;
-              setCurrentPhase(newPhase);
-              if (args.announcement) {
-                console.log("Phase change announcement:", args.announcement);
-              }
-              break;
+            // case "raise_hand":
+            //   const handRaise: RaisedHand = {
+            //     panelistId: toolCallMessage.role || "unknown",
+            //     panelistName: toolCallMessage.role || "unknown", // Simplified to avoid squadMembers dependency
+            //     questionType: args.questionType,
+            //     targetSpeaker: args.targetSpeaker,
+            //     urgency: args.urgency,
+            //     preview: args.preview,
+            //     timestamp: Date.now()
+            //   };
+            //   setRaisedHands(prev => [...prev, handRaise]);
+            //   console.log("🙋‍♂️ Hand raised:", handRaise);
+            //   break;
 
-            case "manage_time":
-              console.log("Time management:", args.action, args.message);
-              break;
+            // case "change_phase":
+            //   const newPhase = args.newPhase as keyof typeof PANEL_PHASES;
+            //   setCurrentPhase(newPhase);
+            //   if (args.announcement) {
+            //     console.log("Phase change announcement:", args.announcement);
+            //   }
+            //   break;
+
+            // case "manage_time":
+            //   console.log("Time management:", args.action, args.message);
+            //   break;
           }
         });
       }
@@ -297,21 +388,6 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     };
   }, [onSpeechStart, onSpeechEnd, onCallStart, onCallEnd, onVolumeLevel, onMessageUpdate, onError]);
 
-  // Helper function to get assistant name - simplified to avoid dependency loops
-  const getAssistantName = useCallback((assistantId: string) => {
-    // Use the panelContextRef to get names instead of squadMembers to avoid dependency issues
-    if (assistantId === "moderator") return "Moderator";
-    if (assistantId === "user") return "You";
-    
-    const panelists = panelContextRef.current?.aiPanelists || [];
-    const panelistIndex = assistantId.replace("panelist_", "");
-    const panelist = panelists[parseInt(panelistIndex)];
-    return panelist?.name || assistantId;
-  }, []);
-
-  // Assistant creation functions moved to @/lib/assistants/panel-debate-assistants.ts
-
-
   // Core panel debate functions
   const startPanelDebate = useCallback(async (context: PanelContext) => {
     try {
@@ -350,6 +426,9 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
       setSquadMembers(newSquadMembers);
       setCurrentSpeaker("moderator");
       
+      // Initialize the AI speaker reference with moderator
+      lastAiSpeakerRef.current = "moderator";
+      
       // Start with squad configuration - VAPI will handle transfers automatically
       console.log("📞 Starting VAPI call with squad configuration", squadConfig);
       await vapi.start(undefined, undefined, squadConfig);
@@ -370,6 +449,8 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     
     // Clear all state
     panelContextRef.current = null;
+    lastAiSpeakerRef.current = null;
+    pendingUserTransferRef.current = false;
     setMessages([]);
     setActiveTranscript(null);
     setCurrentSpeaker(null);
@@ -392,6 +473,7 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     if (callStatus === CALL_STATUS.ACTIVE) {
       setCurrentSpeaker("moderator");
       setIsUserTurn(false);
+      lastAiSpeakerRef.current = "moderator";
     }
   }, [callStatus]);
 
@@ -399,13 +481,22 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     if (callStatus === CALL_STATUS.ACTIVE) {
       setCurrentSpeaker(panelistId);
       setIsUserTurn(false);
+      lastAiSpeakerRef.current = panelistId;
     }
   }, [callStatus]);
 
   const transferToUser = useCallback(() => {
     if (callStatus === CALL_STATUS.ACTIVE) {
-      setCurrentSpeaker("user");
+      // Manual transfer to user - immediately set (used for UI controls)
       setIsUserTurn(true);
+      setCurrentSpeaker("user");
+      setSquadMembers(prev => prev.map(member => ({
+        ...member,
+        isActive: member.assistantId === "user"
+      })));
+      // Clear any pending transfer since we're manually transferring
+      pendingUserTransferRef.current = false;
+      // Don't update lastAiSpeakerRef for user transfers
     }
   }, [callStatus]);
 
@@ -416,8 +507,8 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
       // Check if this is a user hand-raise
       if (hand.panelistId === "user" || hand.panelistName === "You") {
         // For user hand-raise: simple state transition without confusing system messages
-        setCurrentSpeaker("user");
         setIsUserTurn(true);
+        setCurrentSpeaker("user");
         
       } else {
         // For AI panelist hand-raise: transfer to that panelist

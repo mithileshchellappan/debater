@@ -5,6 +5,7 @@ export enum MessageTypeEnum {
   HANG = "hang",
   CONVERSATION_UPDATE = "conversation-update",
   TRANSFER_UPDATE = "transfer-update",
+  TOOL_CALLS = "tool-calls",
 }
 
 export enum TranscriptMessageTypeEnum {
@@ -18,6 +19,16 @@ export interface TranscriptMessage {
   transcript: string;
   timestamp: string;
   role: "user" | "assistant";
+}
+
+export interface ToolCallMessage {
+  type: MessageTypeEnum.TOOL_CALLS;
+  toolCalls: Array<{
+    function: {
+      name: string;
+      arguments: Record<string, any>;
+    };
+  }>;
 }
 
 export interface ConversationUpdateMessage {
@@ -65,7 +76,8 @@ export type Message =
   | FunctionCallMessage 
   | FunctionResultMessage 
   | HangMessage
-  | TransferUpdateMessage;
+  | TransferUpdateMessage
+  | ToolCallMessage;
 
 // Debate-specific types
 export interface DebateAssistantConfig {
