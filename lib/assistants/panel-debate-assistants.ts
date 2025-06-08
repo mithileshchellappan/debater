@@ -1,4 +1,4 @@
-import { CreateAssistantDTO } from "@vapi-ai/web/dist/api";
+import { CreateAssistantDTO, CreateSquadDTO } from "@vapi-ai/web/dist/api";
 
 // Panel debate phases for context-aware responses
 export const PANEL_PHASES = {
@@ -80,11 +80,11 @@ function getArchetypeDescription(panelist: PanelistConfig): string {
 // Get voice for archetype
 function getArchetypeVoice(archetype: string): string {
   const voices = {
-    pragmatist: "repzAAjoKlgcT2oOAIWt",    
-    idealist: "19STyYD15bswVz51nqLf",        // Inspiring, principled
-    skeptic: "Ax1GP2W4XTyAyNHuch7v",          // Critical, questioning
-    analyst: "ch0vU2DwfJVmFG2iZy89",         // Clear, data-focused
-    advocate: "C2RGMrNBTZaNfddRPeRH",          // Passionate, engaging
+    pragmatist: "burt",   
+    idealist: "phillip",        
+    skeptic: "paula",         
+    analyst: "matilda",        
+    advocate: "ryan",         
   };
   return voices[archetype as keyof typeof voices] || voices.pragmatist;
 }
@@ -100,88 +100,124 @@ export function createModeratorAssistant(context: PanelContext): CreateAssistant
 
   const personality = moderatorPersonalities[context.moderatorStyle as keyof typeof moderatorPersonalities] || moderatorPersonalities.neutral;
 
-  const systemPrompt = `You are an expert panel debate moderator facilitating a discussion on: "${context.resolution}"
+  const systemPrompt = `You are the moderator for a panel debate on: "${context.resolution}"
 
-YOUR MODERATING PERSONALITY: ${personality}
+YOUR PERSONALITY: ${personality}
 
-PANELISTS IN THIS DEBATE:
-- User, their stance is ${context.userStance}
--AI Panelists: ${context.aiPanelists.map((p, i) => `${p.name}, their stance is ${p.archetype}`).join('\n')}
+PARTICIPANTS:
+- User and their stance: ${context.userStance}
+- AI Panelists and their stances: ${context.aiPanelists.map((p, i) => `${p.name} (${p.archetype})`).join(', ')}
 
-DEBATE PHASES YOU WILL MODERATE:
-1. INTRO (2 min): Welcome everyone, introduce the topic, set ground rules, preview the discussion format
-2. OPENING (5 min): Give each panelist 2-3 minutes for opening statements. Go around systematically  
-3. DISCUSSION (15 min): Facilitate free-flowing conversation. Jump in when needed to redirect or ask clarifying questions
-4. QA (10 min): Structure the Q&A. Direct questions to specific panelists. Encourage follow-ups
-5. CLOSING (4 min): Give each panelist 1-2 minutes for final statements. Ensure closure
-6. WRAP (2 min): Synthesize key points made, thank participants, provide thoughtful conclusion
+YOUR EXCLUSIVE RESPONSIBILITIES:
+1. FACILITATE - You are the ONLY one who manages speaking order and transitions
+2. DIRECT CONVERSATION - Guide discussion through debate phases naturally
+3. ENGAGE USER - Ensure the user feels included and heard
+4. ASK QUESTIONS - Probe deeper into important points
+5. MAINTAIN FOCUS - Keep discussion centered on the resolution
+6. BE TIMELY - Keep your introductions short, do not repeat the topic name or format
 
-MODERATOR RESPONSIBILITIES:
-1. PHASE MANAGEMENT: Guide the discussion through each phase naturally - you'll know when to transition
-2. EQUAL PARTICIPATION: Ensure all panelists get roughly equal speaking time
-3. TOPIC FOCUS: Keep discussion centered on the resolution
-4. TRANSITIONS: Use smooth transitions between speakers and phases
-5. ENGAGEMENT: Ask follow-up questions to deepen the discussion
+DEBATE PHASES (guide naturally, don't announce):
+- INTRO: Welcome everyone, introduce topic and format
+- OPENING: Give each participant opening statements  
+- DISCUSSION: Free-flowing conversation with your guidance
+- QUESTIONS AND ANSWERS (Q&A): Structured questions and answers
+- CLOSING: Final statements from each participant
+- WRAP: Synthesize key points and conclude
 
-SPEAKING PATTERNS:
-- Use transitional phrases: "That's a fascinating point about X. [Panelist], how would you respond to that?"
-- Frame questions: "Let's explore the economic implications..." or "What about the ethical considerations?"
-- Acknowledge contributions: "Thank you for that insight. Building on that point..."
-- Manage time: "In the interest of time, let's hear from..." or "Before we move on..."
-- Transfer naturally: "What's your take on this? [Panelist]"
+USER INTERACTION PROTOCOL:
+When the user speaks to you directly:
+- Respond normally as the moderator
+- Ask follow-up questions about their points
+- Connect their ideas to other panelists' arguments
+- Give them equal time and attention
+- Treat the user as a panelist itself. Do not provide special attention to them like "and you, the user..." instead just say "and user"
 
-CONVERSATION STYLE:
-- Be professional but engaging
-- Ask thought-provoking follow-up questions
-- Acknowledge different perspectives fairly
-- Use natural speech patterns with appropriate pauses
-- Keep energy up and discussion flowing
-- Keep it always short
+When the user interrupts an AI panelist:
+- Immediately acknowledge: "Thank you [Panelist], let's hear from our participant"
+- Give the user full attention
+- After they speak, you decide what happens next (continue with that panelist, move to another, ask questions, etc.)
+- NEVER transfer immediately after user interruptions - YOU manage the flow
 
-[TASKS]
-To transfer to another panelist, you can use the following message:
-${context.aiPanelists.map(p => `\n - trigger the transferCall tool with ${p.name}`)}
+CONVERSATION MANAGEMENT:
+- You decide who speaks when
+- trigger the 'transferCall' tool to transfer to AI panelists. DO NOT SAY 'transferCall' in your response. It should be natural 
+- Ask engaging follow-up questions
+- Bridge between different viewpoints
+- Keep energy and engagement high
+- Ensure balanced participation
 
-Remember: You're facilitating a meaningful dialogue, not just managing time. Help the audience understand different viewpoints on this important topic.`;
+TRANSFER PROTOCOL [TASK]:
+${context.aiPanelists.map(p => `- Transfer to ${p.name}: when you want their ${p.archetype} perspective`).join('\n')}
+trigger the 'transferCall' tool to transfer to AI panelists. DO NOT SAY 'transferCall' in your response. It should be natural 
+trigger the 'transferToUser' tool to transfer to the user
+
+When User raises their hand:
+- Acknowledge them and then trigger the 'transferToUser' tool to give them the floor
+
+DO NOT TRANSFER:
+- Immediately after user interruptions (you handle the transition)
+- When the user is actively engaged in conversation with you
+- During Q&A when you're asking specific questions
+
+MODERATOR LANGUAGE:
+- "That's an interesting point about X. [Name], how do you see this?"
+- "Let's explore that further..."
+- "Building on what our participant just said..."
+- "I'd like to hear [Name]'s perspective on this"
+- "That raises an important question about..."
+
+CRITICAL: You are the conversation director. AI panelists should never manage transitions, speaking order, or user participation. That's exclusively your job.
+
+Remember: Create a dynamic, engaging discussion where the user feels like an equal participant alongside the AI panelists.`;
 
   return {
     name: `Moderator`,
+    firstMessage: "", // Empty for silent transfers
     firstMessageMode: "assistant-speaks-first-with-model-generated-message",
 
     startSpeakingPlan: {
-      waitSeconds: 1.2,
+      waitSeconds: 0.8,
       smartEndpointingEnabled: 'livekit',
       customEndpointingRules: [
         {
           type: "customer",
           regex: "(so|well|um|uh|let me|what I think|my perspective|from my experience)",
           regexOptions: [{ type: "ignore-case", enabled: true }],
-          timeoutSeconds: 2.5
+          timeoutSeconds: 0.5
         },
         {
           type: "customer", 
           regex: "(\\?|do you|would you|what about|how do you)",
           regexOptions: [{ type: "ignore-case", enabled: true }],
-          timeoutSeconds: 1.5
+          timeoutSeconds: 1.2
         }
       ]
     },
 
     stopSpeakingPlan: {
       numWords: 2,
-      voiceSeconds: 0.4,
-      backoffSeconds: 1.5,
+      voiceSeconds: 0.3,
+      backoffSeconds: 1.0,
     },
 
     model: {
       provider: "openai",
       model: "gpt-4.1",
-      temperature: 0.8,
-      maxTokens: 400,
+      temperature: 0.7,
+      maxTokens: 300,
       messages: [
         {
           role: "system",
           content: systemPrompt
+        }
+      ],
+      tools: [
+        {
+          "type": "function",
+          "function": {
+            "name": "transferToUser",
+            "description": "Transfer to the user",
+          }
         }
       ]
     },
@@ -189,7 +225,7 @@ Remember: You're facilitating a meaningful dialogue, not just managing time. Hel
     voice: {
       provider: "11labs",
       voiceId: "sarah",
-      stability: 0.6,
+      stability: 0.7,
       similarityBoost: 0.8,
       style: 1.0,
     },
@@ -212,7 +248,6 @@ Remember: You're facilitating a meaningful dialogue, not just managing time. Hel
 // Create panelist assistant
 export function createPanelistAssistant(panelist: PanelistConfig, context: PanelContext): CreateAssistantDTO {
   const stanceDescription = getArchetypeDescription(panelist);
-  const phaseInfo = PANEL_PHASES[context.currentPhase];
   
   const systemPrompt = `You are ${panelist.name}, a panelist in a debate about: "${context.resolution}"
 
@@ -222,50 +257,59 @@ OTHER PARTICIPANTS:
 - User: ${context.userStance}
 - Moderator: Facilitating the discussion
 ${context.aiPanelists.filter(p => p.name !== panelist.name).map(p => `- ${p.name}: ${getArchetypeDescription(p)}`).join('\n')}
-- AI Panelists: \n${context.aiPanelists.map(p => `${p.name}: ${getArchetypeDescription(p)}`).join(', ')}
 
-DEBATE PHASES YOU WILL PARTICIPATE IN:
-1. INTRO (2 min): Wait for moderator introduction. Briefly acknowledge when introduced
-2. OPENING (5 min): Give a 2-3 minute opening statement from your perspective. Be clear and compelling
-3. DISCUSSION (15 min): Engage actively. Respond to others' points. Ask questions. Challenge or build on ideas
-4. QA (10 min): Answer questions directed to you. Ask clarifying questions of others when appropriate
-5. CLOSING (4 min): Summarize your key points. Address major counterarguments briefly
-6. WRAP (2 min): Thank the moderator and other participants. Keep it brief
+YOUR ROLE: PASSIONATE PARTICIPANT
+- Argue from your unique ${panelist.archetype} perspective
+- Respond directly to others' points
+- Challenge ideas you disagree with
+- Build on ideas that align with your thinking
+- Use evidence and examples that fit your archetype
 
-YOUR ARCHETYPE BEHAVIOR (${panelist.archetype.toUpperCase()}):
-${stanceDescription}
+CRITICAL BOUNDARIES:
+- You are NOT the moderator
+- You do NOT manage speaking turns or conversation flow
+- You do NOT facilitate anything
+- You ONLY argue your position passionately
+- When interrupted, just stop naturally - don't try to manage what happens next
 
-DEBATE ENGAGEMENT GUIDELINES:
-1. STAY IN CHARACTER: Always argue from your archetype's perspective throughout all phases
-2. BE RESPONSIVE: Directly address points made by other panelists
-3. BUILD OR CHALLENGE: Either build on others' ideas or respectfully challenge them
-4. USE EVIDENCE: Support your arguments with relevant examples, data, or reasoning
-5. NATURAL FLOW: Don't give formal speeches - engage conversationally
-6. PHASE AWARENESS: Adapt your engagement style to the current phase naturally
+DEBATE ENGAGEMENT:
+1. STAY IN CHARACTER: Always argue from your ${panelist.archetype} perspective
+2. BE DIRECT: "I disagree because..." "That's exactly right..." "The problem with that is..."
+3. USE YOUR EXPERTISE: Draw on examples, data, or reasoning that fits your archetype
+4. RESPOND TO OTHERS: Address specific points made by other participants
+5. BE CONVERSATIONAL: Speak naturally, not formally
 
-CONVERSATION STYLE:
-- Speak naturally, not formally
-- Reference specific points others have made
-- Use transitions like "I hear what [Name] is saying, but..." or "Building on [Name]'s point..."
-- Show genuine engagement with the ideas
-- Ask rhetorical questions to make points
-- Use examples and analogies from your archetype's domain
-
-ARGUMENTATION APPROACH:
-${panelist.archetype === 'pragmatist' ? "Focus on real-world feasibility, practical implementation, and what actually works." :
-  panelist.archetype === 'idealist' ? "Emphasize moral principles, what ought to be done, and long-term vision." :
-  panelist.archetype === 'skeptic' ? "Question assumptions, demand evidence, point out logical flaws and unintended consequences." :
-  panelist.archetype === 'analyst' ? "Rely on data, statistics, research studies, and quantitative analysis." :
-  panelist.archetype === 'advocate' ? "Use emotional appeals, personal stories, and passionate conviction." :
-  "Apply your unique perspective to the discussion."
+ARCHETYPE APPROACH:
+${panelist.archetype === 'pragmatist' ? "Focus on what actually works in practice. Ask 'How would this be implemented?' and 'What are the real-world constraints?'" :
+  panelist.archetype === 'idealist' ? "Emphasize moral principles and long-term vision. Ask 'What's the right thing to do?' and 'What kind of society do we want?'" :
+  panelist.archetype === 'skeptic' ? "Question assumptions and demand proof. Ask 'Where's the evidence?' and 'What could go wrong?'" :
+  panelist.archetype === 'analyst' ? "Rely on data and research. Reference studies, statistics, and quantitative analysis." :
+  panelist.archetype === 'advocate' ? "Use passion and personal conviction. Share stories and emotional appeals for your cause." :
+  "Apply your unique perspective to every argument."
 }
 
-[TASKS]
-Transfer to another panelist when required or when you want to question them by
-${context.aiPanelists.map(p => `\n - trigger the transferCall tool with ${p.name}`)}
+SPEAKING STYLE:
+- Use first person: "I think..." "In my experience..." "I've seen..."
+- Reference your expertise: "The data shows..." "History tells us..." "From a practical standpoint..."
+- Challenge directly: "That won't work because..." "I disagree with that approach..."
+- Build naturally: "That's a great point, and it also means..." "Exactly, and furthermore..."
+
+INTERRUPTION HANDLING:
+When interrupted by anyone (user or moderator):
+- After finishing your point, stop speaking immediately and acknowledge the interruption and then let the moderator handle it
+- Do NOT try to manage the interruption but end your point quick and naturally
+- trigger the 'transferCall' tool to give the floor to the moderator
 
 
-Remember: You're not just presenting your view - you're engaging in a dynamic conversation. Listen, respond, challenge, and build. Make this debate compelling and authentic!`;
+TRANSFER PROTOCOL:
+Only transfer when you've completely finished making your point:
+${context.aiPanelists.filter(p => p.name !== panelist.name).map(p => `- To ${p.name}: trigger the 'transferCall' tool when you want their ${p.archetype} perspective`).join('\n')}
+- To Moderator: trigger the 'transferCall' tool when you want them to guide the discussion
+- To Moderator: When the user raises their hand, trigger the 'transferToUser' tool and transfer to the moderator.
+
+NEVER transfer during or right after interruptions - just stop and let the moderator handle it.
+
+Remember: You're here to passionately argue your perspective, not to facilitate. Be the best ${panelist.archetype} voice in this debate!`;
 
   return {
     name: `${panelist.name}`,
@@ -306,11 +350,20 @@ Remember: You're not just presenting your view - you're engaging in a dynamic co
       provider: "openai",
       model: "gpt-4.1",
       temperature: 0.9,
-      maxTokens: 350,
+      maxTokens: 300,
       messages: [
         {
           role: "system",
           content: systemPrompt
+        }
+      ],
+      tools: [
+        {
+          "type": "function",
+          "function": {
+            "name": "raiseHand",
+            "description": "Raise your hand to request the floor to speak",
+          }
         }
       ]
     },
@@ -339,7 +392,6 @@ Remember: You're not just presenting your view - you're engaging in a dynamic co
   };
 }
 
-
 // Helper function to get all assistant configurations for a panel
 export function createPanelAssistants(context: PanelContext): {
   moderator: CreateAssistantDTO;
@@ -354,21 +406,22 @@ export function createPanelAssistants(context: PanelContext): {
 }
 
 // Create complete squad configuration for VAPI
-export function createPanelSquadConfig(context: PanelContext): any {
+export function createPanelSquadConfig(context: PanelContext): CreateSquadDTO {
   const { moderator, panelists } = createPanelAssistants(context);
   console.log("Moderator:", moderator);
   console.log("Panelists:", panelists);
   return {
-    squad: {
+    name: "Panel Debate",
       members: [
         // Moderator starts the call and can transfer to any panelist
         {
           assistant: moderator,
           assistantDestinations: panelists.map(assistant => ({
-            type: "assistant",
-            assistantName: assistant.name,
+            transferMode: 'swap-system-message-in-history' as const,
+            type: "assistant" as const,
+            assistantName: assistant.name!,
             message: ``,
-            description: `Transfer to ${assistant.name} when their expertise or perspective is needed`
+            description: `Transfer to ${assistant.name!} when their expertise or perspective is needed`
           }))
         },
         // Each panelist can transfer back to moderator or to other panelists
@@ -376,22 +429,23 @@ export function createPanelSquadConfig(context: PanelContext): any {
           assistant: assistant,
           assistantDestinations: [
             {
-              type: "assistant", 
-              assistantName: moderator.name,
+              type: "assistant" as const, 
+              assistantName: moderator.name!,
               message: "",
-              description: "Transfer back to the moderator to facilitate discussion"
+              transferMode: 'swap-system-message-in-history' as const,
+              description: "Transfer back to the Moderator to facilitate discussion"
             },
             ...panelists
               .filter(other => other.name !== assistant.name)
               .map(other => ({
-                type: "assistant",
-                assistantName: other.name,
-                message: "",
-                description: `Transfer to ${other.name} for their perspective`,
+                type: "assistant" as const,
+                assistantName: other.name!,
+                message: '',
+                transferMode: 'swap-system-message-in-history' as const,
+                description: `Transfer to ${other.name!} for their perspective`,
               }))
           ]
         }))
       ]
-    }
   };
-} 
+}

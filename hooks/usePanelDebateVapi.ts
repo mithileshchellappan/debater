@@ -73,7 +73,6 @@ export interface UsePanelDebateVapiReturn {
   activeTranscript: TranscriptMessage | null;
   messages: Message[];
   currentSpeaker: string | null;
-  actualSpeaker: "user" | "assistant" | null;
   squadMembers: SquadMember[];
   raisedHands: RaisedHand[];
   currentPhase: keyof typeof PANEL_PHASES;
@@ -87,6 +86,7 @@ export interface UsePanelDebateVapiReturn {
   transferToPanelist: (panelistId: string) => void;
   transferToUser: () => void;
   // Hand-raising system
+  // raiseUserHand: (questionType?: "clarification" | "challenge" | "follow-up" | "counterpoint", preview?: string) => void;
   acknowledgeQuestion: (handId: number) => void;
   dismissQuestion: (handId: number) => void;
   // Messaging
@@ -107,7 +107,6 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
   
   // Panel-specific state
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
-  const [actualSpeaker, setActualSpeaker] = useState<"user" | "assistant" | null>(null);
   const [squadMembers, setSquadMembers] = useState<SquadMember[]>([]);
   const [raisedHands, setRaisedHands] = useState<RaisedHand[]>([]);
   const [currentPhase, setCurrentPhase] = useState<keyof typeof PANEL_PHASES>("INTRO");
@@ -117,127 +116,163 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
   const panelContextRef = useRef<PanelContext | null>(null);
   const partialTranscriptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // VAPI Event Handlers
-  useEffect(() => {
-    const onSpeechStart = () => {
-      console.log("🎤 Panel Speech started - assistant is speaking");
-      setIsSpeechActive(true);
-      setError(null);
-      setActualSpeaker('assistant');
-      setIsUserTurn(false);
-    };
+  // Stable event handlers using useCallback
+  const onSpeechStart = useCallback(() => {
+    console.log("🎤 Panel Speech started - assistant is speaking");
+    setIsSpeechActive(true);
+    setError(null);
+    setIsUserTurn(false);
+  }, []);
 
-    const onSpeechEnd = () => {
-      console.log("🔇 Panel Speech ended - turn goes to user");
-      setIsSpeechActive(false);
-      setActualSpeaker('user');
-      setIsUserTurn(true);
-    };
+  const onSpeechEnd = useCallback(() => {
+    console.log("🔇 Panel Speech ended - turn goes to user");
+    setIsSpeechActive(false);
+    setIsUserTurn(true);
+  }, []);
 
-    const onCallStart = () => {
-      console.log("Panel debate call has started");
-      setCallStatus(CALL_STATUS.ACTIVE);
-      setError(null);
-    };
+  const onCallStart = useCallback(() => {
+    console.log("Panel debate call has started");
+    setCallStatus(CALL_STATUS.ACTIVE);
+    setError(null);
+  }, []);
 
-    const onCallEnd = () => {
-      console.log("Panel debate call has stopped");
-      setCallStatus(CALL_STATUS.INACTIVE);
-      setCurrentSpeaker(null);
-      setSquadMembers([]);
-      setRaisedHands([]);
-    };
+  const onCallEnd = useCallback(() => {
+    console.log("Panel debate call has stopped");
+    setCallStatus(CALL_STATUS.INACTIVE);
+    setCurrentSpeaker(null);
+    setSquadMembers([]);
+    setRaisedHands([]);
+  }, []);
 
-    const onVolumeLevel = (volume: number) => {
-      setAudioLevel(volume);
-    };
+  const onVolumeLevel = useCallback((volume: number) => {
+    setAudioLevel(volume);
+  }, []);
 
-    const onMessageUpdate = (message: ExtendedMessage) => {
+  const onMessageUpdate = useCallback((message: ExtendedMessage) => {
+    console.log("Panel message received:", message.type);
+
+    if((message.type === 'transfer-update') || (message.type === MessageTypeEnum.CONVERSATION_UPDATE)) {
       console.log("Panel message received:", message.type, message);
+    }
+    
+    // Handle transfer updates to switch current speaker
+    if (message.type === MessageTypeEnum.TRANSFER_UPDATE) {
+      const transferMessage = message as any; 
+      const destinationAssistantName = transferMessage.destination?.assistantName;
       
-      // Handle transfer updates to switch current speaker
-      if (message.type === MessageTypeEnum.TRANSFER_UPDATE) {
-        const transferMessage = message as any; 
-        const destinationAssistantName = transferMessage.destination?.assistantName;
+      if (destinationAssistantName) {
+        console.log("🔄 Transfer detected to:", destinationAssistantName);
+        console.log("📋 Available panelists:", panelContextRef.current?.aiPanelists?.map(p => p.name));
         
-        if (destinationAssistantName) {
-          console.log("🔄 Transfer detected to:", destinationAssistantName);
-          console.log("📋 Available panelists:", panelContextRef.current?.aiPanelists?.map(p => p.name));
-          
-          // Map assistant names to UI speaker IDs
-          let newSpeaker: string | null = null;
-          
-          if (destinationAssistantName === "Moderator") {
-            newSpeaker = "moderator";
-          } else if (destinationAssistantName.startsWith("Panelist")) {
-            // Find the panelist by name in the context
-            const panelists = panelContextRef.current?.aiPanelists || [];
-            console.log("🔍 Looking for panelist:", destinationAssistantName, "in:", panelists.map(p => p.name));
-            const panelistIndex = panelists.findIndex(p => p.name === destinationAssistantName);
-            if (panelistIndex !== -1) {
-              newSpeaker = `panelist_${panelistIndex}`;
-              console.log("✅ Found panelist at index:", panelistIndex, "-> UI ID:", newSpeaker);
-            } else {
-              console.log("❌ Panelist not found, available names:", panelists.map(p => p.name));
-            }
-          }
-          
-          if (newSpeaker) {
-            console.log("🎯 Setting current speaker to:", newSpeaker);
-            setCurrentSpeaker(newSpeaker);
-            setIsUserTurn(false); // AI is now speaking
-            
-            // Update squad member active states
-            setSquadMembers(prev => prev.map(member => ({
-              ...member,
-              isActive: member.assistantId === newSpeaker
-            })));
+        // Map assistant names to UI speaker IDs
+        let newSpeaker: string | null = null;
+        
+        if (destinationAssistantName === "Moderator") {
+          newSpeaker = "moderator";
+        } else if (destinationAssistantName.startsWith("Panelist")) {
+          // Find the panelist by name in the context
+          const panelists = panelContextRef.current?.aiPanelists || [];
+          console.log("🔍 Looking for panelist:", destinationAssistantName, "in:", panelists.map(p => p.name));
+          const panelistIndex = panelists.findIndex(p => p.name === destinationAssistantName);
+          if (panelistIndex !== -1) {
+            newSpeaker = `panelist_${panelistIndex}`;
+            console.log("✅ Found panelist at index:", panelistIndex, "-> UI ID:", newSpeaker);
+          } else {
+            console.log("❌ Panelist not found, available names:", panelists.map(p => p.name));
           }
         }
-        return; // Don't process transfer messages further
+        
+        if (newSpeaker) {
+          console.log("🎯 Setting current speaker to:", newSpeaker);
+          setCurrentSpeaker(newSpeaker);
+          setIsUserTurn(false); // AI is now speaking
+          
+          // Update squad member active states
+          setSquadMembers(prev => prev.map(member => ({
+            ...member,
+            isActive: member.assistantId === newSpeaker
+          })));
+        }
+      }
+      return; // Don't process transfer messages further
+    }
+    
+    // Handle tool calls for hand-raising and moderation - simplified to avoid dependency issues
+    if (message.type === MessageTypeEnum.FUNCTION_CALL) {
+      const functionCallMessage = message as FunctionCallMessageExtended;
+      if (functionCallMessage.toolCalls) {
+        functionCallMessage.toolCalls.forEach((toolCall: any) => {
+          const { name, arguments: args } = toolCall.function;
+
+          switch (name) {
+            case "raise_hand":
+              const handRaise: RaisedHand = {
+                panelistId: functionCallMessage.role || "unknown",
+                panelistName: functionCallMessage.role || "unknown", // Simplified to avoid squadMembers dependency
+                questionType: args.questionType,
+                targetSpeaker: args.targetSpeaker,
+                urgency: args.urgency,
+                preview: args.preview,
+                timestamp: Date.now()
+              };
+              setRaisedHands(prev => [...prev, handRaise]);
+              console.log("🙋‍♂️ Hand raised:", handRaise);
+              break;
+
+            case "change_phase":
+              const newPhase = args.newPhase as keyof typeof PANEL_PHASES;
+              setCurrentPhase(newPhase);
+              if (args.announcement) {
+                console.log("Phase change announcement:", args.announcement);
+              }
+              break;
+
+            case "manage_time":
+              console.log("Time management:", args.action, args.message);
+              break;
+          }
+        });
+      }
+    }
+    
+    if (
+      message.type === MessageTypeEnum.TRANSCRIPT &&
+      message.transcriptType === TranscriptMessageTypeEnum.PARTIAL
+    ) {
+      // Debounce partial transcript updates
+      if (partialTranscriptTimeoutRef.current) {
+        clearTimeout(partialTranscriptTimeoutRef.current);
       }
       
-      // Handle tool calls for hand-raising and moderation
-      if (message.type === MessageTypeEnum.FUNCTION_CALL) {
-        handleToolCalls(message);
+      if (message.transcript.trim().length > 2) {
+        partialTranscriptTimeoutRef.current = setTimeout(() => {
+          setActiveTranscript(message);
+        }, 100);
+      }
+    } else {
+      if (message.type === MessageTypeEnum.TRANSCRIPT && !message.timestamp) {
+        message.timestamp = new Date().toISOString();
       }
       
-      if (
-        message.type === MessageTypeEnum.TRANSCRIPT &&
-        message.transcriptType === TranscriptMessageTypeEnum.PARTIAL
-      ) {
-        // Debounce partial transcript updates
+      setMessages((prev) => [...prev, message]);
+      
+      if (message.type === MessageTypeEnum.TRANSCRIPT) {
+        setActiveTranscript(null);
         if (partialTranscriptTimeoutRef.current) {
           clearTimeout(partialTranscriptTimeoutRef.current);
         }
-        
-        if (message.transcript.trim().length > 2) {
-          partialTranscriptTimeoutRef.current = setTimeout(() => {
-            setActiveTranscript(message);
-          }, 100);
-        }
-      } else {
-        if (message.type === MessageTypeEnum.TRANSCRIPT && !message.timestamp) {
-          message.timestamp = new Date().toISOString();
-        }
-        
-        setMessages((prev) => [...prev, message]);
-        
-        if (message.type === MessageTypeEnum.TRANSCRIPT) {
-          setActiveTranscript(null);
-          if (partialTranscriptTimeoutRef.current) {
-            clearTimeout(partialTranscriptTimeoutRef.current);
-          }
-        }
       }
-    };
+    }
+  }, []); // Empty dependency array since we're using refs and don't depend on changing values
 
-    const onError = (e: any) => {
-      console.error("Panel VAPI Error:", e);
-      setCallStatus(CALL_STATUS.INACTIVE);
-      setError(e.message || "An error occurred during the panel debate");
-    };
+  const onError = useCallback((e: any) => {
+    console.error("Panel VAPI Error:", e);
+    setCallStatus(CALL_STATUS.INACTIVE);
+    setError(e.message || "An error occurred during the panel debate");
+  }, []);
 
+  // VAPI Event Handlers
+  useEffect(() => {
     // Register event listeners
     vapi.on("speech-start", onSpeechStart);
     vapi.on("speech-end", onSpeechEnd);
@@ -260,62 +295,19 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
         clearTimeout(partialTranscriptTimeoutRef.current);
       }
     };
-  }, []);
+  }, [onSpeechStart, onSpeechEnd, onCallStart, onCallEnd, onVolumeLevel, onMessageUpdate, onError]);
 
-  // Handle tool calls from assistants
-  const handleToolCalls = useCallback((message: ExtendedMessage) => {
-    // Type guard to check if message has toolCalls
-    if (message.type !== MessageTypeEnum.FUNCTION_CALL) return;
-    
-    const functionCallMessage = message as FunctionCallMessageExtended;
-    if (!functionCallMessage.toolCalls) return;
-
-    functionCallMessage.toolCalls.forEach((toolCall: any) => {
-      const { name, arguments: args } = toolCall.function;
-
-      switch (name) {
-        case "raise_hand":
-          const handRaise: RaisedHand = {
-            panelistId: functionCallMessage.role || "unknown",
-            panelistName: getAssistantName(functionCallMessage.role || ""),
-            questionType: args.questionType,
-            targetSpeaker: args.targetSpeaker,
-            urgency: args.urgency,
-            preview: args.preview,
-            timestamp: Date.now()
-          };
-          setRaisedHands(prev => [...prev, handRaise]);
-          console.log("🙋‍♂️ Hand raised:", handRaise);
-          break;
-
-        case "transfer_to_panelist":
-          transferToPanelist(args.panelistId);
-          if (args.transitionPhrase) {
-            console.log("Moderator transition:", args.transitionPhrase);
-          }
-          break;
-
-        case "change_phase":
-          const newPhase = args.newPhase as keyof typeof PANEL_PHASES;
-          setCurrentPhase(newPhase);
-          if (args.announcement) {
-            console.log("Phase change announcement:", args.announcement);
-          }
-          break;
-
-        case "manage_time":
-          console.log("Time management:", args.action, args.message);
-          // Could trigger UI notifications here
-          break;
-      }
-    });
-  }, []);
-
-  // Helper function to get assistant name
+  // Helper function to get assistant name - simplified to avoid dependency loops
   const getAssistantName = useCallback((assistantId: string) => {
-    const member = squadMembers.find(m => m.assistantId === assistantId);
-    return member?.name || assistantId;
-  }, [squadMembers]);
+    // Use the panelContextRef to get names instead of squadMembers to avoid dependency issues
+    if (assistantId === "moderator") return "Moderator";
+    if (assistantId === "user") return "You";
+    
+    const panelists = panelContextRef.current?.aiPanelists || [];
+    const panelistIndex = assistantId.replace("panelist_", "");
+    const panelist = panelists[parseInt(panelistIndex)];
+    return panelist?.name || assistantId;
+  }, []);
 
   // Assistant creation functions moved to @/lib/assistants/panel-debate-assistants.ts
 
@@ -339,7 +331,7 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
           assistantId: "moderator",
           name: "Moderator", 
           role: "moderator",
-          isActive: true
+          isActive: false
         },
         ...context.aiPanelists.map((panelist, index) => ({
           assistantId: `panelist_${index}`,
@@ -360,7 +352,7 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
       
       // Start with squad configuration - VAPI will handle transfers automatically
       console.log("📞 Starting VAPI call with squad configuration", squadConfig);
-      await vapi.start(undefined, undefined, squadConfig.squad);
+      await vapi.start(undefined, undefined, squadConfig);
       
       console.log("✅ Panel debate started successfully");
       
@@ -417,24 +409,23 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     }
   }, [callStatus]);
 
-  // Hand-raising system
+
   const acknowledgeQuestion = useCallback((handIndex: number) => {
     const hand = raisedHands[handIndex];
     if (hand) {
-      // Update UI state
-      transferToPanelist(hand.panelistId);
+      // Check if this is a user hand-raise
+      if (hand.panelistId === "user" || hand.panelistName === "You") {
+        // For user hand-raise: simple state transition without confusing system messages
+        setCurrentSpeaker("user");
+        setIsUserTurn(true);
+        
+      } else {
+        // For AI panelist hand-raise: transfer to that panelist
+        transferToPanelist(hand.panelistId);
+      }
       
       // Remove the acknowledged hand
       setRaisedHands(prev => prev.filter((_, i) => i !== handIndex));
-      
-      // Send acknowledgment message (VAPI Squad will handle transfer)
-      vapi.send({
-        type: "add-message",
-        message: {
-          role: "system",
-          content: `Moderator has acknowledged the raised hand from ${hand.panelistName}. Their ${hand.questionType} was: "${hand.preview}"`
-        }
-      });
     }
   }, [raisedHands, transferToPanelist]);
 
@@ -463,7 +454,6 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     activeTranscript,
     messages,
     currentSpeaker,
-    actualSpeaker,
     squadMembers,
     raisedHands,
     currentPhase,
@@ -474,6 +464,7 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     transferToModerator,
     transferToPanelist,
     transferToUser,
+    // raiseUserHand,
     acknowledgeQuestion,
     dismissQuestion,
     sendMessage,
