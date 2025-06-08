@@ -315,14 +315,14 @@ export default function PanelDebatePage() {
           )}
           
           {/* Debug Display - Remove this after testing */}
-          {process.env.NODE_ENV === 'development' && (
+          {/* {process.env.NODE_ENV === 'development' && (
             <div className="bg-yellow-900 border border-yellow-500 p-2 rounded-none text-xs">
               <p className="text-yellow-200">Debug: currentSpeaker = {currentSpeaker || "null"}</p>
               <p className="text-yellow-200">Debug: isUserTurn = {isUserTurn ? "true" : "false"}</p>
               <p className="text-yellow-200">Debug: isSpeechActive = {isSpeechActive ? "true" : "false"}</p>
               <p className="text-yellow-200">Speaking Flow: {isSpeechActive ? "AI SPEAKING" : isUserTurn ? "USER CAN SPEAK" : "WAITING FOR NEXT SPEAKER"}</p>
             </div>
-          )}
+          )} */}
         </div>
 
         {/* Controls Bar */}
@@ -365,12 +365,12 @@ export default function PanelDebatePage() {
                 </div>
               )}
 
-              {isCallActive && (currentSpeaker === "user" || isUserTurn) && (
+              {/* {isCallActive && (currentSpeaker === "user" || isUserTurn) && (
                 <div className="flex items-center space-x-2 bg-green-600 text-white px-3 py-1 rounded-none animate-pulse">
                   <CheckCircle className="w-4 h-4" />
                   <span className="text-sm font-medium font-mono">YOUR TURN TO SPEAK</span>
                 </div>
-              )}
+              )} */}
             </div>
           </div>
 

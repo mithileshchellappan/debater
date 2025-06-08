@@ -206,7 +206,7 @@ Debate with passion and precision. Make every word count, and speak like the ide
           type: "customer",
           regex: "(first|second|third|furthermore|additionally|moreover|however|therefore|because|since|given that|the evidence shows|studies indicate|according to|research demonstrates|my contention|my framework|value of|criterion|standard)",
           regexOptions: [{ type: "ignore-case", enabled: true }],
-          timeoutSeconds: 5.0 // Allow 8 seconds for developing arguments
+          timeoutSeconds: 5.0
         },
 
         // Rule 2: Longer timeout for cross-examination substantive responses

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { ArrowRight, Check } from "lucide-react"
 import lincoln from "@/assets/lincoln.png"
 import douglas from "@/assets/douglas.png"
+import Image from "next/image"
 
 export default function SideSelectionPage() {
   const [selectedSide, setSelectedSide] = useState<"affirmative" | "negative" | null>(null)
@@ -49,7 +50,7 @@ export default function SideSelectionPage() {
             onClick={() => setSelectedSide("affirmative")}
           >
             <div className="text-center space-y-6">
-            {selectedSide === "affirmative" ? <Check className="w-1/2 h-1/2 mx-auto" /> : <img src={lincoln.src} alt="Abraham Lincoln" className="w-1/3 h-1/3 mx-auto" />}
+            {selectedSide === "affirmative" ? <Check className="w-1/2 h-1/2 mx-auto" /> : <Image src={lincoln.src} alt="Abraham Lincoln" className="w-1/3 h-1/3 mx-auto" />}
               <div className="space-y-2">
                 <h2 className="text-2xl font-bold">ABRAHAM LINCOLN</h2>
                 <p className="text-lg font-semibold">AFFIRMATIVE</p>
@@ -70,7 +71,7 @@ export default function SideSelectionPage() {
             onClick={() => setSelectedSide("negative")}
           >
             <div className="text-center space-y-6">
-              {selectedSide === "negative" ? <Check className="w-1/2 h-1/2 mx-auto" /> : <img src={douglas.src} alt="Stephen Douglas" className="w-1/3 h-1/3 mx-auto" />}
+              {selectedSide === "negative" ? <Check className="w-1/2 h-1/2 mx-auto" /> : <Image src={douglas.src} alt="Stephen Douglas" className="w-1/3 h-1/3 mx-auto" />}
               <div className="space-y-2">
                 <h2 className="text-2xl font-bold">STEPHEN DOUGLAS</h2>
                 <p className="text-lg font-semibold">NEGATIVE</p>

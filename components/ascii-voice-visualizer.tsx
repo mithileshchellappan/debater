@@ -24,8 +24,8 @@ export default function AsciiVoiceVisualizer({
   // ASCII characters from darkest to lightest
   const asciiChars = " .:-=+*#%@"
 
-  // Reduced sensitivity - increased speech threshold
-  const SPEECH_THRESHOLD = 0.25 // Increased from 0.1 to reduce sensitivity
+  // Lowered threshold to be more responsive to lower volumes
+  const SPEECH_THRESHOLD = 0.05 // Lowered from 0.25 to 0.05 for better sensitivity
 
   // Ball properties
   const ballRef = useRef({
@@ -221,13 +221,13 @@ export default function AsciiVoiceVisualizer({
       // Use VAPI audioLevel for both user and AI speech
       volume = audioLevel || 0;
 
-      // Only pulse when speech is detected (volume above threshold)
-      if (volume > SPEECH_THRESHOLD) {
-        // Scale the radius based on volume level
-        ball.targetRadius = ball.baseRadius + volume * 100
+      // Always respond to audio level, even if below threshold
+      if (volume > 0.03) { // Moderate threshold
+        // Scale the radius based on volume level - balanced scaling
+        ball.targetRadius = ball.baseRadius + Math.pow(volume, 0.7) * 80 // Balanced scaling
 
         // Create particles when speaking
-        addParticles(volume, canvas)
+        addParticles(volume * 0.5, canvas) // Moderate particles
       } else {
         // Return to base radius when not speaking
         ball.targetRadius = ball.baseRadius
@@ -249,14 +249,23 @@ export default function AsciiVoiceVisualizer({
         ball.thinkingTime = 0
       }
 
-      // Add subtle animation when no audio is available
-      const time = Date.now() / 1000
-      const pulseFactor = Math.sin(time) * 0.05 + 0.95 // Reduced from 0.1 to 0.05
-      ball.targetRadius = ball.baseRadius * pulseFactor
+      // Always show some audio response if we have audioLevel data
+      if (audioLevel > 0.05) {
+        // Use audio level even when not in active speaking mode - moderate
+        ball.targetRadius = ball.baseRadius + Math.pow(audioLevel, 0.8) * 60
+        if (audioLevel > 0.1) {
+          addParticles(audioLevel * 0.3, canvas)
+        }
+      } else {
+        // Add subtle animation when no audio is available
+        const time = Date.now() / 1000
+        const pulseFactor = Math.sin(time) * 0.05 + 0.95 // Gentle baseline animation
+        ball.targetRadius = ball.baseRadius * pulseFactor
+      }
     }
 
-    // Slower transitions for smoother movement
-    ball.currentRadius += (ball.targetRadius - ball.currentRadius) * 0.08 // Reduced from 0.1 to 0.08
+    // Balanced transitions for smooth but responsive movement
+    ball.currentRadius += (ball.targetRadius - ball.currentRadius) * 0.12 // Moderate responsiveness
     ball.hue += (ball.targetHue - ball.hue) * 0.1
 
     // Update ball position
@@ -357,15 +366,15 @@ export default function AsciiVoiceVisualizer({
 
         // Get amplitude based on VAPI volume level
         let amplitude
-        if (audioLevel > 0) {
-          // Use volume level with some variation per bar for visual effect
-          amplitude = audioLevel * (0.5 + 0.5 * Math.sin(Date.now() / 500 + i * 0.3))
-          amplitude = Math.max(0, Math.min(1, amplitude))
+        if (audioLevel > 0.03) {
+          // Use volume level with some variation per bar for visual effect - balanced
+          amplitude = Math.pow(audioLevel, 0.6) * (0.4 + 0.3 * Math.sin(Date.now() / 450 + i * 0.35))
+          amplitude = Math.max(0.03, Math.min(0.8, amplitude)) // Moderate bounds
         } else {
-          amplitude = 0.05 // Small baseline
+          amplitude = 0.03 // Small baseline
         }
 
-        const barLength = amplitude * 50
+        const barLength = amplitude * 45 // Moderate bar length
 
         const startX = ball.x + Math.cos(angle) * (ball.currentRadius + 10)
         const startY = ball.y + Math.sin(angle) * (ball.currentRadius + 10)

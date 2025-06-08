@@ -200,7 +200,6 @@ Remember: Create a dynamic, engaging discussion where the user feels like an equ
     maxDurationSeconds: MAX_DURATION,
     startSpeakingPlan: {
       waitSeconds: 0.8,
-      smartEndpointingEnabled: 'livekit',
       customEndpointingRules: [
         {
           type: "customer",
@@ -341,7 +340,6 @@ Remember: You're here to passionately argue your perspective, not to facilitate.
     maxDurationSeconds: MAX_DURATION,
     startSpeakingPlan: {
       waitSeconds: 1.0,
-      smartEndpointingEnabled: 'livekit',
       customEndpointingRules: [
         {
           type: "customer",

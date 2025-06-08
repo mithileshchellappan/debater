@@ -122,6 +122,7 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
   const partialTranscriptTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastAiSpeakerRef = useRef<string | null>(null);
   const pendingUserTransferRef = useRef<boolean>(false);
+  const userIsSpeakingRef = useRef<boolean>(false);
 
   // Stable event handlers using useCallback
   const onSpeechStart = useCallback(() => {
@@ -131,9 +132,9 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     setError(null);
     setIsUserTurn(false);
     
-    // If AI is speaking, ensure currentSpeaker reflects the actual AI speaker
-    // This handles cases where transferToUser was called but AI is still speaking
-    if (lastAiSpeakerRef.current && lastAiSpeakerRef.current !== "user") {
+    // Only correct speaker if user is NOT currently speaking
+    // This prevents AI speech events from overriding user speech detection
+    if (!userIsSpeakingRef.current && lastAiSpeakerRef.current && lastAiSpeakerRef.current !== "user") {
       console.log("🔄 AI still speaking after transferToUser, correcting speaker to:", lastAiSpeakerRef.current);
       setCurrentSpeaker(lastAiSpeakerRef.current);
       
@@ -142,6 +143,8 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
         ...member,
         isActive: member.assistantId === lastAiSpeakerRef.current
       })));
+    } else if (userIsSpeakingRef.current) {
+      console.log("🚫 Not correcting speaker - user is currently speaking");
     } else {
       console.log("⚠️ No correction needed - lastAiSpeaker:", lastAiSpeakerRef.current);
     }
@@ -162,13 +165,12 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
         isActive: member.assistantId === "user"
       })));
       pendingUserTransferRef.current = false; // Clear the pending flag
+      userIsSpeakingRef.current = true; // User is now speaking
       console.log("🏁 Cleared pendingUserTransferRef to FALSE");
     } else {
       console.log("⏳ No pending user transfer - waiting for next speaker assignment");
-      setTimeout(() => {
-        setIsUserTurn(true);
-        setCurrentSpeaker("user");
-      }, 2000);
+      setIsUserTurn(false);
+      // Don't automatically set to user - let TRANSFER_UPDATE or other events handle it
     }
   }, []);
 
@@ -330,6 +332,21 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
       message.type === MessageTypeEnum.TRANSCRIPT &&
       message.transcriptType === TranscriptMessageTypeEnum.PARTIAL
     ) {
+              const transcriptMessage = message as TranscriptMessage;
+        if (transcriptMessage.role === 'user' && transcriptMessage.transcript.trim().length > 2) {
+          console.log("🎤 User speaking detected from partial transcript");
+          userIsSpeakingRef.current = true; // Mark user as actively speaking
+          if (currentSpeaker !== "user") {
+            console.log("🔄 Correcting speaker to user based on transcript");
+            setCurrentSpeaker("user");
+            setIsUserTurn(true);
+            setSquadMembers(prev => prev.map(member => ({
+              ...member,
+              isActive: member.assistantId === "user"
+            })));
+          }
+        }
+      
       // Debounce partial transcript updates
       if (partialTranscriptTimeoutRef.current) {
         clearTimeout(partialTranscriptTimeoutRef.current);
@@ -341,6 +358,27 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
         }, 100);
       }
     } else {
+      // Detect user speaking from final transcripts too
+      if (message.type === MessageTypeEnum.TRANSCRIPT) {
+        const transcriptMessage = message as TranscriptMessage;
+        if (transcriptMessage.role === 'user') {
+          console.log("🎤 User speaking detected from final transcript");
+          userIsSpeakingRef.current = true; // Mark user as actively speaking
+          if (currentSpeaker !== "user") {
+            console.log("🔄 Correcting speaker to user based on final transcript");
+            setCurrentSpeaker("user");
+            setIsUserTurn(true);
+            setSquadMembers(prev => prev.map(member => ({
+              ...member,
+              isActive: member.assistantId === "user"
+            })));
+          }
+        } else if (transcriptMessage.role === 'assistant') {
+          // Clear user speaking flag when AI speaks
+          userIsSpeakingRef.current = false;
+        }
+      }
+      
       if (message.type === MessageTypeEnum.TRANSCRIPT && !message.timestamp) {
         message.timestamp = new Date().toISOString();
       }
@@ -451,6 +489,7 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     panelContextRef.current = null;
     lastAiSpeakerRef.current = null;
     pendingUserTransferRef.current = false;
+    userIsSpeakingRef.current = false;
     setMessages([]);
     setActiveTranscript(null);
     setCurrentSpeaker(null);

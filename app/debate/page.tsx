@@ -28,8 +28,8 @@ const DEBATE_PHASES = [
   {
     code: "AC",
     name: "Affirmative Constructive",
-    description: "6 minutes - Present your case supporting the resolution",
-    duration: 360,
+    description: "3 minutes - Present your case supporting the resolution",
+    duration: 180,
     speaker: "affirmative"
   },
   {
@@ -42,8 +42,8 @@ const DEBATE_PHASES = [
   {
     code: "NC",
     name: "Negative Constructive",
-    description: "7 minutes - Present case against resolution and refute affirmative",
-    duration: 420,
+    description: "3 minutes - Present case against resolution and refute affirmative",
+    duration: 180,
     speaker: "negative"
   },
   {
@@ -63,8 +63,8 @@ const DEBATE_PHASES = [
   {
     code: "NR",
     name: "Negative Rebuttal",
-    description: "6 minutes - Extend negative arguments",
-    duration: 360,
+    description: "3 minutes - Extend negative arguments",
+    duration: 180,
     speaker: "negative"
   },
   {
@@ -420,7 +420,6 @@ Remember your role and respond appropriately to this context.`
       phases: currentPhase + 1,
       messages: messages
     }
-    localStorage.setItem("lastDebateData", JSON.stringify(debateData))
     stopDebate()
     router.push("/debate-analysis")
   }
@@ -686,7 +685,7 @@ Remember your role and respond appropriately to this context.`
 
           {/* Center Panel - ASCII Visualizer */}
           <div className="lg:col-span-3 flex flex-col items-center">
-            <div className="w-full h-[500px] flex items-center justify-center">
+            <div className="w-full h-[450px] flex items-center justify-center">
               <div className="w-[500px] h-[500px] bg-black">
                 <AsciiVoiceVisualizer
                   isActive={callStatus === CALL_STATUS.ACTIVE}
@@ -780,7 +779,7 @@ Remember your role and respond appropriately to this context.`
 
         {/* Transcript */}
         <div className="bg-black p-4 rounded-none">
-          <div ref={transcriptRef} className="h-48 overflow-y-auto font-mono text-sm transcript-area">
+          <div ref={transcriptRef} className="h-48 overflow-y-auto font-mono text-sm transcript-area ">
             {/* Show final transcript messages */}
             {transcriptHistory.map((item, index) => {
               const isUser = item.message.role === 'user'
