@@ -403,8 +403,8 @@ export default function PanelDebatePage() {
                   onClick={() => setShowEndWarning(true)}
                   className="bg-red-600 text-white hover:bg-red-700 rounded-none border border-red-500 font-mono"
                 >
-                  <PhoneOff className="w-4 h-4 mr-2" />
-                  END
+                  <AlertTriangle className="w-4 h-4 mr-2" />
+                  END DEBATE
                 </Button>
               </>
             )}

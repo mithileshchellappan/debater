@@ -194,11 +194,10 @@ Debate with passion and precision. Make every word count, and speak like the ide
     name: `${aiName} - ${aiStance.charAt(0).toUpperCase() + aiStance.slice(1)} Debater`,
     firstMessage: getContextualFirstMessage(currentPhase, aiName, aiStance, shouldAISpeak, shouldAIWait),
     firstMessageMode: shouldAIWait ? "assistant-waits-for-user" : "assistant-speaks-first-with-model-generated-message",
-
+    maxDurationSeconds: 3600,
     // Configure conservative speaking behavior - controlled via system messages
     startSpeakingPlan: {
       waitSeconds: 1.5, // Wait 1.5 seconds before speaking
-      smartEndpointingEnabled: 'livekit',
 
       // Debate-specific endpointing rules to prevent interruptions during substantive arguments
       customEndpointingRules: [
@@ -334,36 +333,6 @@ function getPhaseSpecificInstructions(phase: string, stance: "affirmative" | "ne
 
     default:
       return "Engage appropriately based on the current debate context.";
-  }
-}
-
-// Legacy function - keeping for compatibility
-function getFirstMessage(phase: string, name: string, stance: string, shouldSpeak: boolean, shouldWait: boolean): string {
-  // If AI should wait, stay silent
-  if (shouldWait) {
-    return "";
-  }
-
-  // If it's not the AI's speaking phase, be ready to listen
-  if (!shouldSpeak) {
-    return `I'm ${name}, ready to debate the ${stance} position. I'm listening carefully as you present your case.`;
-  }
-
-  // If it's the AI's speaking phase, be ready to speak
-  switch (phase) {
-    case "CX1":
-    case "CX2":
-      return `I'm ${name}, ready for cross-examination. I have some strategic questions about your position.`;
-    case "NC":
-      return `I'm ${name}, ready to present the negative case against this resolution and address your affirmative arguments.`;
-    case "NR":
-      return `I'm ${name}, ready for my final speech. I'll extend our strongest arguments and explain why the negative position should prevail.`;
-    case "1AR":
-      return `I'm ${name}, ready to rebuild the affirmative case and address your negative arguments.`;
-    case "2AR":
-      return `I'm ${name}, ready for my final affirmative speech. I'll focus on the key voting issues.`;
-    default:
-      return `I'm ${name}, ready to present the ${stance} position in this debate.`;
   }
 }
 

@@ -521,30 +521,6 @@ Remember your role and respond appropriately to this context.`
           <div className="flex items-center space-x-2">
             <Button
               onClick={() => {
-                if (callStatus === CALL_STATUS.INACTIVE) {
-                  const context = createDebateContext()
-                  startDebate(context)
-                  setIsTimerRunning(true)
-                } else if (callStatus === CALL_STATUS.ACTIVE) {
-                  const newTimerState = !isTimerRunning
-                  if (newTimerState) {
-                    sendDebateContext("timer_started", `Timer resumed at ${formatTime(timer)}`)
-                  } else {
-                    sendDebateContext("timer_paused", `Timer paused at ${formatTime(timer)}`)
-                  }
-                  setIsTimerRunning(newTimerState)
-                }
-              }}
-              disabled={callStatus === CALL_STATUS.LOADING || callStatus === CALL_STATUS.ENDING}
-              className="bg-neutral-800 text-white hover:bg-neutral-700 rounded-none border border-neutral-600 font-mono disabled:opacity-50"
-            >
-              {callStatus === CALL_STATUS.INACTIVE ? "START" : 
-               callStatus === CALL_STATUS.LOADING ? "CONNECTING..." :
-               callStatus === CALL_STATUS.ENDING ? "ENDING..." :
-               isTimerRunning ? "PAUSE" : "RESUME"}
-            </Button>
-            <Button
-              onClick={() => {
                 sendDebateContext("phase_skipped", `User manually advanced from ${DEBATE_PHASES[currentPhase].name}`)
                 nextPhase()
               }}
