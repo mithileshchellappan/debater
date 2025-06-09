@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -21,121 +21,31 @@ import {
   Home,
 } from "lucide-react"
 
-// Mock data - in a real app this would come from the debate session
-const MOCK_ANALYSIS_DATA = {
-  debateType: "lincoln-douglas",
-  resolution: "The benefits of artificial intelligence outweigh the risks to personal privacy.",
-  participants: {
-    user: { name: "LINCOLN", side: "AFFIRMATIVE", stance: "Supporting AI benefits" },
-    ai: { name: "DOUGLAS", side: "NEGATIVE", stance: "Protecting privacy rights" },
-    moderator: null,
-    panelists: [],
-  },
-  outcome: {
-    winner: "NEGATIVE",
-    verdict: "The AI Judge found in favor of the Negative.",
-    keyIssues: [
-      "The Negative successfully challenged the Affirmative's criterion of 'Societal Progress'",
-      "Strong evidence presented on data breaches undermined the Affirmative's safety claims",
-      "The Affirmative's framework was well-constructed but inadequately defended",
-    ],
-  },
-  metrics: {
-    speakingTime: {
-      user: { time: "8m 45s", percentage: 52 },
-      ai: { time: "7m 30s", percentage: 48 },
-    },
-    turnCount: {
-      user: 12,
-      ai: 11,
-    },
-    argumentStrength: {
-      user: { clarity: 4, evidence: 3, relevance: 4, impact: 3, rebuttal: 2 },
-      ai: { clarity: 4, evidence: 4, relevance: 4, impact: 4, rebuttal: 4 },
-    },
-  },
-  arguments: {
-    user: [
-      {
-        text: "AI improves healthcare outcomes through predictive analytics",
-        status: "partially-rebutted",
-        evidence: "strong",
-      },
-      {
-        text: "Economic benefits of AI automation outweigh job displacement",
-        status: "successfully-rebutted",
-        evidence: "adequate",
-      },
-      {
-        text: "Privacy regulations can mitigate AI risks",
-        status: "unchallenged",
-        evidence: "weak",
-      },
-    ],
-    ai: [
-      {
-        text: "Data breaches expose millions to identity theft",
-        status: "unchallenged",
-        evidence: "strong",
-      },
-      {
-        text: "AI surveillance threatens democratic freedoms",
-        status: "partially-rebutted",
-        evidence: "strong",
-      },
-      {
-        text: "Current regulations are insufficient for AI oversight",
-        status: "unchallenged",
-        evidence: "adequate",
-      },
-    ],
-  },
-  framework: {
-    user: { value: "Societal Progress", criterion: "Maximizing Human Welfare" },
-    ai: { value: "Individual Liberty", criterion: "Protecting Fundamental Rights" },
-    winner: "ai",
-  },
-  fallacies: [
-    { type: "False Dichotomy", context: "Presenting only two options for AI regulation" },
-    { type: "Appeal to Emotion", context: "Using fear-based language about surveillance" },
-  ],
-  suggestions: [
-    "Next time, try to directly address your opponent's privacy concerns earlier in your constructive",
-    "Consider providing specific examples of successful AI privacy implementations",
-    "Your time management was good, but ensure all contentions receive equal development",
-    "Practice linking your arguments more clearly to your value framework",
-  ],
-  transcript: `[00:30] LINCOLN: My first contention is that AI improves healthcare outcomes...
-[01:45] DOUGLAS: I appreciate my opponent's concern for healthcare, however...
-[03:20] LINCOLN: In response to my opponent's privacy concerns...
-[04:55] DOUGLAS: The evidence clearly shows that data breaches...`,
-}
-
 export default function DebateAnalysisPage() {
   const [activeTab, setActiveTab] = useState("overview")
-  const [expandedArguments, setExpandedArguments] = useState<{ [key: string]: boolean }>({})
   const [userNotes, setUserNotes] = useState("")
-  const [analysisData, setAnalysisData] = useState(MOCK_ANALYSIS_DATA)
+  const [analysisData, setAnalysisData] = useState<any>()
+  const [transcript, setTranscript] = useState("")
   const router = useRouter()
-
+  const params = useParams()
+  const slug = params.slug
   useEffect(() => {
-    // In a real app, load analysis data from localStorage or API
     const savedNotes = localStorage.getItem("debateAnalysisNotes")
     if (savedNotes) {
       setUserNotes(savedNotes)
     }
+    async function fetchAnalysisData() {
+      const callDetails = await fetch(`/api/analysis?callId=${slug}`)
+      const data = await callDetails.json()
+      setAnalysisData(data.analysis.structuredData)
+      setTranscript(data.transcript)
+    }
+    fetchAnalysisData()
   }, [])
 
   useEffect(() => {
     localStorage.setItem("debateAnalysisNotes", userNotes)
   }, [userNotes])
-
-  const toggleArgumentExpansion = (key: string) => {
-    setExpandedArguments((prev) => ({
-      ...prev,
-      [key]: !prev[key],
-    }))
-  }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -165,7 +75,6 @@ export default function DebateAnalysisPage() {
 
   const renderOverviewTab = () => (
     <div className="space-y-6">
-      {/* Debate Summary */}
       <div className="bg-neutral-900 border border-neutral-700 p-6 rounded-none">
         <h3 className="text-xl font-semibold mb-4 flex items-center">
           <Trophy className="w-5 h-5 mr-2" />
@@ -491,7 +400,7 @@ export default function DebateAnalysisPage() {
         </h3>
 
         <div className="bg-black border border-neutral-600 p-4 rounded-none h-64 overflow-y-auto font-mono text-sm">
-          <pre className="text-neutral-300 whitespace-pre-wrap">{analysisData.transcript}</pre>
+          <pre className="text-neutral-300 whitespace-pre-wrap">{transcript}</pre>
         </div>
       </div>
 
@@ -538,7 +447,24 @@ export default function DebateAnalysisPage() {
           </Button>
         </div>
 
-        {/* Tab Navigation */}
+        {/* Analysis Not Ready State */}
+        {!analysisData ? (
+          <div className="bg-neutral-900 border border-neutral-700 p-8 rounded-none text-center">
+            <div className="space-y-4">
+              <FileText className="w-16 h-16 text-neutral-400 mx-auto" />
+              <h2 className="text-xl font-semibold text-white">Analysis Not Created Yet</h2>
+              <p className="text-neutral-400">
+                Your debate analysis is still being processed. Please refresh to view your results.
+              </p>
+              <Button 
+                onClick={() => window.location.reload()} 
+                className="bg-white text-black hover:bg-neutral-200 rounded-none"
+              >
+                Refresh
+              </Button>
+            </div>
+          </div>
+        ) : (
         <div className="bg-neutral-900 border border-neutral-700 rounded-none">
           <div className="flex space-x-0 border-b border-neutral-700">
             {[
@@ -569,6 +495,7 @@ export default function DebateAnalysisPage() {
             {activeTab === "feedback" && renderFeedbackTab()}
           </div>
         </div>
+        )}
       </div>
     </div>
   )

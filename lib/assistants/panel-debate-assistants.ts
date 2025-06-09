@@ -195,33 +195,6 @@ Remember: Create a dynamic, engaging discussion where the user feels like an equ
 
   return {
     name: `Moderator`,
-    firstMessage: "", // Empty for silent transfers
-    firstMessageMode: "assistant-speaks-first-with-model-generated-message",
-    maxDurationSeconds: MAX_DURATION,
-    startSpeakingPlan: {
-      waitSeconds: 0.8,
-      customEndpointingRules: [
-        {
-          type: "customer",
-          regex: "(so|well|um|uh|let me|what I think|my perspective|from my experience)",
-          regexOptions: [{ type: "ignore-case", enabled: true }],
-          timeoutSeconds: 0.5
-        },
-        {
-          type: "customer", 
-          regex: "(\\?|do you|would you|what about|how do you)",
-          regexOptions: [{ type: "ignore-case", enabled: true }],
-          timeoutSeconds: 1.2
-        }
-      ]
-    },
-
-    stopSpeakingPlan: {
-      numWords: 2,
-      voiceSeconds: 0.3,
-      backoffSeconds: 1.0,
-    },
-
     model: {
       provider: "openai",
       model: "gpt-4.1",
@@ -251,12 +224,6 @@ Remember: Create a dynamic, engaging discussion where the user feels like an equ
       stability: 0.7,
       similarityBoost: 0.8,
       style: 1.0,
-    },
-
-    transcriber: {
-      provider: "deepgram",
-      model: "nova-2",
-      language: "en-US",
     },
 
     metadata: {
@@ -336,37 +303,6 @@ Remember: You're here to passionately argue your perspective, not to facilitate.
 
   return {
     name: `${panelist.name}`,
-    firstMessageMode: "assistant-speaks-first-with-model-generated-message",
-    maxDurationSeconds: MAX_DURATION,
-    startSpeakingPlan: {
-      waitSeconds: 1.0,
-      customEndpointingRules: [
-        {
-          type: "customer",
-          regex: "(however|but|although|furthermore|additionally|the thing is|what we need to understand|the reality is)",
-          regexOptions: [{ type: "ignore-case", enabled: true }],
-          timeoutSeconds: 3.0
-        },
-        {
-          type: "customer",
-          regex: "(\\?|don't you think|wouldn't you agree|what do you think)",
-          regexOptions: [{ type: "ignore-case", enabled: true }],
-          timeoutSeconds: 1.5
-        },
-        {
-          type: "customer",
-          regex: "(for example|studies show|research indicates|according to|the data shows)",
-          regexOptions: [{ type: "ignore-case", enabled: true }],
-          timeoutSeconds: 2.5
-        }
-      ]
-    },
-    stopSpeakingPlan: {
-      numWords: 2,
-      voiceSeconds: 0.3,
-      backoffSeconds: 2.0,
-    },
-
     model: {
       provider: "openai",
       model: "gpt-4.1",
@@ -397,13 +333,6 @@ Remember: You're here to passionately argue your perspective, not to facilitate.
       similarityBoost: 0.75,
       style: 1.0,
     },
-
-    transcriber: {
-      provider: "deepgram",
-      model: "nova-2",
-      language: "en-US",
-    },
-
     metadata: {
       role: "panelist",
       archetype: panelist.archetype,
@@ -468,6 +397,44 @@ export function createPanelSquadConfig(context: PanelContext): CreateSquadDTO {
               }))
           ]
         }))
-      ]
+      ],
+      membersOverrides: {
+        firstMessage: "",
+        transcriber: {
+          provider: "deepgram",
+          model: "nova-2",
+          language: "en-US",
+        },
+        firstMessageMode: "assistant-speaks-first-with-model-generated-message",
+        maxDurationSeconds: MAX_DURATION,
+        startSpeakingPlan: {
+          waitSeconds: 1.0,
+          customEndpointingRules: [
+            {
+              type: "customer",
+              regex: "(however|but|although|furthermore|additionally|the thing is|what we need to understand|the reality is)",
+              regexOptions: [{ type: "ignore-case", enabled: true }],
+              timeoutSeconds: 3.0
+            },
+            {
+              type: "customer",
+              regex: "(\\?|don't you think|wouldn't you agree|what do you think)",
+              regexOptions: [{ type: "ignore-case", enabled: true }],
+              timeoutSeconds: 1.5
+            },
+            {
+              type: "customer",
+              regex: "(for example|studies show|research indicates|according to|the data shows)",
+              regexOptions: [{ type: "ignore-case", enabled: true }],
+              timeoutSeconds: 2.5
+            }
+          ]
+        },
+        stopSpeakingPlan: {
+          numWords: 2,
+          voiceSeconds: 0.3,
+          backoffSeconds: 2.0,
+        },
+      }
   };
 }

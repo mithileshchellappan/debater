@@ -6,11 +6,17 @@ export enum MessageTypeEnum {
   CONVERSATION_UPDATE = "conversation-update",
   TRANSFER_UPDATE = "transfer-update",
   TOOL_CALLS = "tool-calls",
+  END_OF_CALL_REPORT = "end-of-call-report",
 }
 
 export enum TranscriptMessageTypeEnum {
   PARTIAL = "partial",
   FINAL = "final",
+}
+
+export interface EndOfCallReportMessage<T> {
+  type: MessageTypeEnum.END_OF_CALL_REPORT;
+  summary: T;
 }
 
 export interface TranscriptMessage {
@@ -77,7 +83,8 @@ export type Message =
   | FunctionResultMessage 
   | HangMessage
   | TransferUpdateMessage
-  | ToolCallMessage;
+  | ToolCallMessage
+  | EndOfCallReportMessage<any>;
 
 // Debate-specific types
 export interface DebateAssistantConfig {

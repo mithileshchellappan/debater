@@ -36,6 +36,7 @@ export interface UseDebateVapiReturn {
   passMicrophone: () => void;
   interruptAssistant: () => void;
   error: string | null;
+  callId: string | null;
 }
 
 export function useDebateVapi(): UseDebateVapiReturn {
@@ -46,6 +47,7 @@ export function useDebateVapi(): UseDebateVapiReturn {
   const [audioLevel, setAudioLevel] = useState(0);
   const [currentAssistant, setCurrentAssistant] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [callId, setCallId] = useState<string | null>(null);
   
   // Track actual speaker based on speech events
   const [actualSpeaker, setActualSpeaker] = useState<"user" | "assistant" | null>(null);
@@ -95,7 +97,9 @@ export function useDebateVapi(): UseDebateVapiReturn {
 
     const onMessageUpdate = (message: Message) => {
       console.log("Debate message received:", message);
-      
+      if(message.type === MessageTypeEnum.END_OF_CALL_REPORT) {
+        console.log("Debate call ended with report:", message.summary);
+      }
       if (
         message.type === MessageTypeEnum.TRANSCRIPT &&
         message.transcriptType === TranscriptMessageTypeEnum.PARTIAL
@@ -199,7 +203,7 @@ export function useDebateVapi(): UseDebateVapiReturn {
       
       const response = await vapi.start(assistant);
       console.log("✅ NEW VAPI CALL SUCCESSFULLY STARTED:", response);
-      
+      response && setCallId(response.id);
       // Send initial phase update
       setTimeout(() => {
         const phaseMessage = createPhaseUpdateMessage(context);
@@ -346,7 +350,8 @@ export function useDebateVapi(): UseDebateVapiReturn {
     passMicrophone,
     interruptAssistant,
     error,
-  };
+    callId,
+    };
 }
 
 // Utility hook for managing debate phases

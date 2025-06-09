@@ -251,6 +251,174 @@ Debate with passion and precision. Make every word count, and speak like the ide
       ]
     },
 
+    analysisPlan: {
+      structuredDataPlan: {
+        schema: {
+          type: "object",
+          description: "Comprehensive analysis of the Lincoln-Douglas debate",
+          properties: {
+            debateType: {
+              type: "string",
+              description: "Type of debate format"
+            },
+            resolution: {
+              type: "string", 
+              description: "The debate resolution being argued"
+            },
+            participants: {
+              type: "object",
+              properties: {
+                user: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string", description: "User's debater name" },
+                    side: { type: "string", description: "AFFIRMATIVE or NEGATIVE" },
+                    stance: { type: "string", description: "Brief description of user's position" }
+                  }
+                },
+                ai: {
+                  type: "object", 
+                  properties: {
+                    name: { type: "string", description: "AI debater name" },
+                    side: { type: "string", description: "AFFIRMATIVE or NEGATIVE" },
+                    stance: { type: "string", description: "Brief description of AI's position" }
+                  }
+                }
+              }
+            },
+            outcome: {
+              type: "object",
+              properties: {
+                winner: { type: "string", description: "AFFIRMATIVE or NEGATIVE" },
+                verdict: { type: "string", description: "Brief explanation of the decision" },
+                keyIssues: {
+                  type: "array",
+                  items: { type: "string", description: "Major turning points or decisive arguments" }
+                }
+              }
+            },
+            metrics: {
+              type: "object",
+              properties: {
+                speakingTime: {
+                  type: "object",
+                  properties: {
+                    user: {
+                      type: "object",
+                      properties: {
+                        time: { type: "string", description: "Duration in format 'Xm Ys'" },
+                        percentage: { type: "number", description: "Percentage of total speaking time" }
+                      }
+                    },
+                    ai: {
+                      type: "object", 
+                      properties: {
+                        time: { type: "string", description: "Duration in format 'Xm Ys'" },
+                        percentage: { type: "number", description: "Percentage of total speaking time" }
+                      }
+                    }
+                  }
+                },
+                turnCount: {
+                  type: "object",
+                  properties: {
+                    user: { type: "number", description: "Number of speaking turns by user" },
+                    ai: { type: "number", description: "Number of speaking turns by AI" }
+                  }
+                },
+                argumentStrength: {
+                  type: "object",
+                  properties: {
+                    user: {
+                      type: "object",
+                      properties: {
+                        clarity: { type: "number", description: "1-5 rating for argument clarity" },
+                        evidence: { type: "number", description: "1-5 rating for evidence quality" },
+                        relevance: { type: "number", description: "1-5 rating for topical relevance" },
+                        impact: { type: "number", description: "1-5 rating for argument impact" },
+                        rebuttal: { type: "number", description: "1-5 rating for rebuttal effectiveness" }
+                      }
+                    },
+                    ai: {
+                      type: "object",
+                      properties: {
+                        clarity: { type: "number", description: "1-5 rating for argument clarity" },
+                        evidence: { type: "number", description: "1-5 rating for evidence quality" },
+                        relevance: { type: "number", description: "1-5 rating for topical relevance" },
+                        impact: { type: "number", description: "1-5 rating for argument impact" },
+                        rebuttal: { type: "number", description: "1-5 rating for rebuttal effectiveness" }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            arguments: {
+              type: "object",
+              properties: {
+                user: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      text: { type: "string", description: "Summary of the argument made" },
+                      status: { type: "string", description: "unchallenged, partially-rebutted, or successfully-rebutted" },
+                      evidence: { type: "string", description: "weak, adequate, or strong" }
+                    }
+                  }
+                },
+                ai: {
+                  type: "array", 
+                  items: {
+                    type: "object",
+                    properties: {
+                      text: { type: "string", description: "Summary of the argument made" },
+                      status: { type: "string", description: "unchallenged, partially-rebutted, or successfully-rebutted" },
+                      evidence: { type: "string", description: "weak, adequate, or strong" }
+                    }
+                  }
+                }
+              }
+            },
+            framework: {
+              type: "object",
+              properties: {
+                user: {
+                  type: "object",
+                  properties: {
+                    value: { type: "string", description: "User's philosophical value/highest good" },
+                    criterion: { type: "string", description: "User's criterion/standard for achieving the value" }
+                  }
+                },
+                ai: {
+                  type: "object",
+                  properties: {
+                    value: { type: "string", description: "AI's philosophical value/highest good" },
+                    criterion: { type: "string", description: "AI's criterion/standard for achieving the value" }
+                  }
+                },
+                winner: { type: "string", description: "user or ai - whose framework was more compelling" }
+              }
+            },
+            fallacies: {
+              type: "array",
+              items: {
+                type: "object", 
+                properties: {
+                  type: { type: "string", description: "Name of the logical fallacy" },
+                  context: { type: "string", description: "When/how the fallacy was used" }
+                }
+              }
+            },
+            suggestions: {
+              type: "array",
+              items: { type: "string", description: "Specific improvement recommendations for the user" }
+            }
+          }
+        }
+      }
+    },
+
     // Configure when assistant should stop speaking - less aggressive for debates
     stopSpeakingPlan: {
       numWords: 2,

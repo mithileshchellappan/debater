@@ -144,7 +144,8 @@ export default function DebatePage() {
     passMicrophone,
     interruptAssistant,
     error,
-    sendMessage
+    sendMessage,
+    callId
   } = useDebateVapi()
 
   // Derived state
@@ -421,7 +422,7 @@ Remember your role and respond appropriately to this context.`
       messages: messages
     }
     stopDebate()
-    router.push("/debate-analysis")
+    router.push(`/debate-analysis/${callId}`)
   }
 
   const timeRemaining = getTimeRemaining()

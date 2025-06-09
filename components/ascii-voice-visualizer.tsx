@@ -441,9 +441,6 @@ export default function AsciiVoiceVisualizer({
 
     resizeCanvas()
 
-    // No longer need microphone access - using VAPI audioLevel instead
-    console.log("🎭 Visualizer initialized with VAPI audio levels")
-
     // Add a small delay to ensure canvas is properly sized before starting animation
     setTimeout(() => {
       animate()
