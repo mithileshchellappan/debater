@@ -93,6 +93,7 @@ export interface UsePanelDebateVapiReturn {
   // Messaging
   sendMessage: (message: string, role?: "user" | "system") => void;
   error: string | null;
+  callId: string | null;
 }
 
 
@@ -116,6 +117,7 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
   const [raisedHands, setRaisedHands] = useState<RaisedHand[]>([]);
   const [currentPhase, setCurrentPhase] = useState<keyof typeof PANEL_PHASES>("INTRO");
   const [isUserTurn, setIsUserTurn] = useState(false);
+  const [callId, setCallId] = useState<string | null>(null);
   
   // Refs for managing context
   const panelContextRef = useRef<PanelContext | null>(null);
@@ -186,6 +188,7 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     setCurrentSpeaker(null);
     setSquadMembers([]);
     setRaisedHands([]);
+    setCallId(null);
   }, []);
 
   const onVolumeLevel = useCallback((volume: number) => {
@@ -469,7 +472,8 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
       
       // Start with squad configuration - VAPI will handle transfers automatically
       console.log("📞 Starting VAPI call with squad configuration", squadConfig);
-      await vapi.start(undefined, undefined, squadConfig);
+      const response = await vapi.start(undefined, undefined, squadConfig);
+      response && setCallId(response.id);
       
       console.log("✅ Panel debate started successfully");
       
@@ -599,5 +603,6 @@ export function usePanelDebateVapi(): UsePanelDebateVapiReturn {
     dismissQuestion,
     sendMessage,
     error,
+    callId
   };
 } 

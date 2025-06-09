@@ -26,7 +26,6 @@ export default function PanelDebatePage() {
   const {
     isSpeechActive,
     callStatus,
-    audioLevel,
     activeTranscript,
     messages,
     currentSpeaker,
@@ -37,13 +36,11 @@ export default function PanelDebatePage() {
     startPanelDebate,
     stopPanelDebate,
     nextPhase: nextDebatePhase,
-    transferToModerator,
-    transferToPanelist,
-    transferToUser,
     acknowledgeQuestion,
     dismissQuestion,
     sendMessage,
-    error
+    error,
+    callId
   } = usePanelDebateVapi()
 
   // Load panel configuration from localStorage
@@ -179,7 +176,7 @@ export default function PanelDebatePage() {
     
     localStorage.setItem("lastDebateData", JSON.stringify(debateData))
     handleStopDebate()
-    router.push("/panel-analysis")
+    router.push(`/panel-analysis/${callId}`)
   }
 
   const getModeratorStyleName = () => {

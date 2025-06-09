@@ -435,6 +435,233 @@ export function createPanelSquadConfig(context: PanelContext): CreateSquadDTO {
           voiceSeconds: 0.3,
           backoffSeconds: 2.0,
         },
+        analysisPlan: {
+          structuredDataPlan: {
+            schema: {
+              type: "object",
+              description: "Comprehensive analysis of the panel debate",
+              properties: {
+                debateType: {
+                  type: "string",
+                  enum: ["panel"]
+                },
+                resolution: {
+                  type: "string",
+                  description: "The debate resolution/topic"
+                },
+                participants: {
+                  type: "object",
+                  properties: {
+                    user: {
+                      type: "object",
+                      properties: {
+                        name: { type: "string", description: "User's debater name" },
+                        stance: { type: "string", description: "User's stance" }
+                      },
+                      required: ["name", "stance"]
+                    },
+                    moderator: {
+                      type: "object",
+                      properties: {
+                        name: { type: "string", description: "Moderator's name" },
+                        style: { type: "string", description: "Moderator's style" }
+                      },
+                      required: ["name", "style"]
+                    },
+                    panelists: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          name: { type: "string", description: "Panelist's name" },
+                          stance: { type: "string", description: "Panelist's stance" }
+                        },
+                        required: ["name", "stance"]
+                      }
+                    }
+                  },
+                  required: ["user", "moderator", "panelists"]
+                },
+                assessment: {
+                  type: "object",
+                  properties: {
+                    focus: { type: "string", description: "Focus of the discussion" },
+                    description: { type: "string", description: "Description of the discussion" },
+                    icon: {
+                      type: "string",
+                      enum: ["productive", "contentious", "balanced", "insightful", "well-moderated"]
+                    }
+                  },
+                  required: ["focus", "description", "icon"]
+                },
+                keyThemes: {
+                  type: "array",
+                  items: { type: "string", description: "Key discussion themes and turning points" },
+                  description: "Key discussion themes and turning points"
+                },
+                metrics: {
+                  type: "object",
+                  properties: {
+                    speakingTime: {
+                      type: "object",
+                      properties: {
+                        user: {
+                          type: "object",
+                          properties: {
+                            time: { type: "string", description: "Time spent speaking" },
+                            percentage: { type: "number", description: "Percentage of total speaking time" }
+                          },
+                          required: ["time", "percentage"]
+                        },
+                        moderator: {
+                          type: "object",
+                          properties: {
+                            time: { type: "string", description: "Time spent speaking" },
+                            percentage: { type: "number", description: "Percentage of total speaking time" }
+                          },
+                          required: ["time", "percentage"]
+                        }
+                      },
+                      patternProperties: {
+                        "^panelist-\\d+$": {
+                          type: "object",
+                          properties: {
+                            time: { type: "string", description: "Time spent speaking" },
+                            percentage: { type: "number", description: "Percentage of total speaking time" }
+                          },
+                          required: ["time", "percentage"]
+                        }
+                      },
+                      required: ["user", "moderator"]
+                    },
+                    turnCount: {
+                      type: "object",
+                      properties: {
+                          user: { type: "number", description: "Number of turns taken by the user" },
+                        moderator: { type: "number", description: "Number of turns taken by the moderator" }
+                      },
+                      patternProperties: {
+                        "^panelist-\\d+$": { type: "number", description: "Number of turns taken by the panelist" }
+                      },
+                      required: ["user", "moderator"]
+                    },
+                    requestsToSpeak: {
+                      type: "object",
+                      properties: {
+                        total: { type: "number", description: "Total number of requests to speak" },
+                        acknowledged: { type: "number", description: "Number of requests to speak that were acknowledged" },
+                        successful: { type: "number", description: "Number of requests to speak that were successful" }
+                      },
+                      required: ["total", "acknowledged", "successful"]
+                    },
+                    interactionFlow: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          from: { type: "string", description: "Speaker who initiated the interaction" },
+                          to: { type: "string", description: "Speaker who received the interaction" },
+                          count: { type: "number", description: "Number of interactions" }
+                        },
+                        required: ["from", "to", "count"]
+                      }
+                    }
+                  },
+                  required: ["speakingTime", "turnCount", "requestsToSpeak", "interactionFlow"]
+                },
+                stanceRepresentation: {
+                  type: "object",
+                  properties: {
+                    user: {
+                      type: "object",
+                      properties: {
+                        effectiveness: { type: "string", description: "Effectiveness of the user's stance" },
+                        score: { type: "number", minimum: 1, maximum: 5, description: "Score of the user's stance" },
+                        keyArguments: {
+                          type: "array",
+                          items: { type: "string", description: "Key arguments for the user's stance" }
+                        }
+                      },
+                      required: ["effectiveness", "score", "keyArguments"]
+                    },
+                    panelists: {
+                      type: "array",
+                      items: {
+                        type: "object",
+                        properties: {
+                          effectiveness: { type: "string", description: "Effectiveness of the panelist's stance" },
+                          score: { type: "number", minimum: 1, maximum: 5, description: "Score of the panelist's stance" },
+                          keyArguments: {
+                            type: "array",
+                            items: { type: "string", description: "Key arguments for the panelist's stance" }
+                          }
+                        },
+                        required: ["effectiveness", "score", "keyArguments"]
+                      }
+                    }
+                  },
+                  required: ["user", "panelists"]
+                },
+                impactfulContributions: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      speaker: { type: "string", description: "Speaker who made the impactful contribution" },
+                      text: { type: "string", description: "Text of the impactful contribution" },
+                      impact: {
+                        type: "string",
+                        enum: ["high", "medium", "low"]
+                      }
+                    },
+                    required: ["speaker", "text", "impact"]
+                  }
+                },
+                moderatorEffectiveness: {
+                  type: "object",
+                  properties: {
+                    overall: { type: "string", description: "Overall effectiveness of the moderator" },
+                    timeManagement: { type: "number", minimum: 1, maximum: 5, description: "Effectiveness of the moderator's time management" },
+                    questionQuality: { type: "number", minimum: 1, maximum: 5, description: "Effectiveness of the moderator's question quality" },
+                    fairness: { type: "number", minimum: 1, maximum: 5, description: "Effectiveness of the moderator's fairness" },
+                    feedback: { type: "string", description: "Feedback on the moderator's performance" }
+                  },
+                  required: ["overall", "timeManagement", "questionQuality", "fairness", "feedback"]
+                },
+                fallacies: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      type: { type: "string", description: "Type of fallacy" },
+                      context: { type: "string", description: "Context of the fallacy" }
+                    },
+                    required: ["type", "context"]
+                  }
+                },
+                suggestions: {
+                  type: "array",
+                  items: { type: "string", description: "AI suggestions for improvement" },
+                  description: "AI suggestions for improvement"
+                },
+              },
+              required: [
+                "debateType",
+                "resolution", 
+                "participants",
+                "assessment",
+                "keyThemes",
+                "metrics",
+                "stanceRepresentation",
+                "impactfulContributions",
+                "moderatorEffectiveness",
+                "fallacies",
+                "suggestions",
+                "transcript"
+              ]
+            }
+          }
+        }
       }
   };
 }
