@@ -28,7 +28,8 @@ import {
 export default function PanelAnalysisPage() {
   const [activeTab, setActiveTab] = useState("overview")
   const [userNotes, setUserNotes] = useState("")
-  const [analysisData, setAnalysisData] = useState<any>()
+  const [analysisData, setAnalysisData] = useState<any>(null)
+  const [transcript, setTranscript] = useState<any>(null)
   const router = useRouter()
   const { slug } = useParams()
 
@@ -42,7 +43,8 @@ export default function PanelAnalysisPage() {
       const response = await fetch(`/api/analysis?callId=${slug}`)
       const data = await response.json()
       console.log(data)
-      setAnalysisData(data)
+      setAnalysisData(data.analysis.structuredData)
+      setTranscript(data.transcript)
     }
     fetchAnalysisData()
     
@@ -183,7 +185,7 @@ export default function PanelAnalysisPage() {
           <p className="text-2xl font-bold text-white">{analysisData?.metrics?.turnCount?.user}</p>
           <p className="text-sm text-neutral-400">Speaking Turns</p>
           <p className="text-xs text-neutral-500">
-            Total: {Object.values(analysisData?.metrics?.turnCount).reduce((a: any, b: any) => a + b, 0)}
+            Total: {analysisData?.metrics?.turnCount && Object.values(analysisData?.metrics?.turnCount).reduce((a, b) => (a as number) + (b as number), 0)}
           </p>
         </div>
 
@@ -331,7 +333,7 @@ export default function PanelAnalysisPage() {
               </div>
             </div>
 
-            {analysisData.participants.panelists.map((panelist, index) => (
+            {analysisData.participants.panelists.map((panelist: any, index: number) => (
               <div key={index} className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Bot className="w-4 h-4 text-orange-400" />
@@ -433,7 +435,7 @@ export default function PanelAnalysisPage() {
               arguments supporting this included:
             </p>
             <ul className="space-y-1">
-              {analysisData.stanceRepresentation.user.keyArguments.map((arg, index) => (
+              {analysisData.stanceRepresentation.user.keyArguments.map((arg: string, index: number) => (
                 <li key={index} className="flex items-start">
                   <span className="text-blue-400 mr-2">•</span>
                   <span className="text-neutral-300 text-sm">{arg}</span>
@@ -443,7 +445,7 @@ export default function PanelAnalysisPage() {
           </div>
 
           {/* AI Panelists Stance */}
-          {analysisData.participants.panelists.map((panelist, index) => (
+          {analysisData.participants.panelists.map((panelist: any, index: number) => (
             <div key={index} className="bg-black border border-neutral-600 p-4 rounded-none">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-2">
@@ -461,7 +463,7 @@ export default function PanelAnalysisPage() {
               </div>
               <p className="text-sm text-neutral-400 mb-2">Stance: "{panelist.stance}"</p>
               <ul className="space-y-1">
-                {analysisData.stanceRepresentation.panelists[index].keyArguments.map((arg, argIndex) => (
+                {analysisData.stanceRepresentation.panelists[index].keyArguments.map((arg: string, argIndex: number) => (
                   <li key={argIndex} className="flex items-start">
                     <span className="text-orange-400 mr-2">•</span>
                     <span className="text-neutral-300 text-sm">{arg}</span>
@@ -481,7 +483,7 @@ export default function PanelAnalysisPage() {
         </h3>
 
         <div className="space-y-3">
-          {analysisData.impactfulContributions.map((contribution, index) => (
+          {analysisData.impactfulContributions.map((contribution: any, index: number) => (
             <div key={index} className="bg-black border border-neutral-600 p-4 rounded-none">
               <div className="flex items-start space-x-3">
                 <Star className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
@@ -631,7 +633,7 @@ export default function PanelAnalysisPage() {
         </h3>
 
         <div className="bg-black border border-neutral-600 p-4 rounded-none h-64 overflow-y-auto font-mono text-sm">
-          <pre className="text-neutral-300 whitespace-pre-wrap">{analysisData.transcript}</pre>
+          <pre className="text-neutral-300 whitespace-pre-wrap">{transcript}</pre>
         </div>
       </div>
 

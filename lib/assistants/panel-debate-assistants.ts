@@ -523,7 +523,7 @@ export function createPanelSquadConfig(context: PanelContext): CreateSquadDTO {
                         }
                       },
                       patternProperties: {
-                        "^panelist-\\d+$": {
+                        "^panelist\\d+$": {
                           type: "object",
                           properties: {
                             time: { type: "string", description: "Time spent speaking" },
@@ -541,7 +541,7 @@ export function createPanelSquadConfig(context: PanelContext): CreateSquadDTO {
                         moderator: { type: "number", description: "Number of turns taken by the moderator" }
                       },
                       patternProperties: {
-                        "^panelist-\\d+$": { type: "number", description: "Number of turns taken by the panelist" }
+                        "^panelist\\d+$": { type: "number", description: "Number of turns taken by the panelist" }
                       },
                       required: ["user", "moderator"]
                     },
