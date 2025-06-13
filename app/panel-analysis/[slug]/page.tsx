@@ -22,6 +22,7 @@ import {
   Zap,
   Eye,
   Gavel,
+  RefreshCw,
 } from "lucide-react"
 
 
@@ -30,8 +31,28 @@ export default function PanelAnalysisPage() {
   const [userNotes, setUserNotes] = useState("")
   const [analysisData, setAnalysisData] = useState<any>(null)
   const [transcript, setTranscript] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { slug } = useParams()
+
+  const fetchAnalysisData = async () => {
+    setIsLoading(true)
+    try {
+      const response = await fetch(`/api/analysis?callId=${slug}`)
+      const data = await response.json()
+      console.log(data)
+      if(data?.analysis?.structuredData) {
+        setAnalysisData(data.analysis.structuredData)
+      }
+      if(data?.transcript) {
+        setTranscript(data.transcript)
+      }
+    } catch (error) {
+      console.error('Failed to fetch analysis data:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   useEffect(() => {
     const savedNotes = localStorage.getItem("panelAnalysisNotes")
@@ -39,15 +60,7 @@ export default function PanelAnalysisPage() {
       setUserNotes(savedNotes)
     }
     
-    async function fetchAnalysisData() {
-      const response = await fetch(`/api/analysis?callId=${slug}`)
-      const data = await response.json()
-      console.log(data)
-      setAnalysisData(data.analysis.structuredData)
-      setTranscript(data.transcript)
-    }
     fetchAnalysisData()
-    
   }, [])
 
   useEffect(() => {
@@ -72,7 +85,7 @@ export default function PanelAnalysisPage() {
   }
 
   const getEffectivenessColor = (effectiveness: string) => {
-    switch (effectiveness.toLowerCase()) {
+    switch (effectiveness?.toLowerCase()) {
       case "effective":
         return "text-green-400"
       case "adequate":
@@ -91,7 +104,7 @@ export default function PanelAnalysisPage() {
   }
 
   const renderOverviewTab = () => {
-    if (!analysisData) return null;
+    if (!analysisData || !transcript) return null;
     
     return (
     <div className="space-y-6">
@@ -105,7 +118,7 @@ export default function PanelAnalysisPage() {
         <div className="space-y-4">
           <div>
             <p className="text-sm text-neutral-400 mb-2">Resolution:</p>
-            <p className="text-white font-medium">{analysisData!.resolution}</p>
+            <p className="text-white font-medium">{analysisData?.resolution}</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-4">
@@ -185,7 +198,7 @@ export default function PanelAnalysisPage() {
           <p className="text-2xl font-bold text-white">{analysisData?.metrics?.turnCount?.user}</p>
           <p className="text-sm text-neutral-400">Speaking Turns</p>
           <p className="text-xs text-neutral-500">
-            Total: {analysisData?.metrics?.turnCount && Object.values(analysisData?.metrics?.turnCount).reduce((a, b) => (a as number) + (b as number), 0)}
+            Total: {analysisData?.metrics?.turnCount && Object.values(analysisData?.metrics?.turnCount).reduce((a, b) => (a as number) + (b as number), 0) as number}
           </p>
         </div>
 
@@ -266,15 +279,15 @@ export default function PanelAnalysisPage() {
                 </div>
                 <span className="text-white">
                   {
-                    analysisData.metrics.speakingTime[
+                    analysisData?.metrics && analysisData?.metrics?.speakingTime[
                       `panelist-${index}` as keyof typeof analysisData.metrics.speakingTime
-                    ].time
+                    ]?.time
                   }{" "}
                   (
                   {
-                    analysisData.metrics.speakingTime[
+                    analysisData?.metrics && analysisData?.metrics?.speakingTime[
                       `panelist-${index}` as keyof typeof analysisData.metrics.speakingTime
-                    ].percentage
+                    ]?.percentage
                   }
                   %)
                 </span>
@@ -283,7 +296,7 @@ export default function PanelAnalysisPage() {
                 <div
                   className="bg-orange-500 h-full rounded-none"
                   style={{
-                    width: `${analysisData.metrics.speakingTime[`panelist-${index}` as keyof typeof analysisData.metrics.speakingTime].percentage}%`,
+                    width: `${analysisData?.metrics && analysisData?.metrics?.speakingTime[`panelist-${index}` as keyof typeof analysisData.metrics.speakingTime]?.percentage}%`,
                   }}
                 ></div>
               </div>
@@ -310,10 +323,10 @@ export default function PanelAnalysisPage() {
                 <div className="w-20 bg-black rounded-none h-2 border border-neutral-600">
                   <div
                     className="bg-blue-500 h-full rounded-none"
-                    style={{ width: `${(analysisData.metrics.turnCount.user / 12) * 100}%` }}
+                    style={{ width: `${(analysisData.metrics && analysisData?.metrics?.turnCount.user / 12) * 100}%` }}
                   ></div>
                 </div>
-                <span className="text-white text-sm w-8">{analysisData.metrics.turnCount.user}</span>
+                <span className="text-white text-sm w-8">{analysisData?.metrics && analysisData?.metrics?.turnCount.user}</span>
               </div>
             </div>
 
@@ -326,14 +339,14 @@ export default function PanelAnalysisPage() {
                 <div className="w-20 bg-black rounded-none h-2 border border-neutral-600">
                   <div
                     className="bg-purple-500 h-full rounded-none"
-                    style={{ width: `${(analysisData.metrics.turnCount.moderator / 12) * 100}%` }}
+                    style={{ width: `${(analysisData.metrics && analysisData?.metrics?.turnCount.moderator / 12) * 100}%` }}
                   ></div>
                 </div>
-                <span className="text-white text-sm w-8">{analysisData.metrics.turnCount.moderator}</span>
+                <span className="text-white text-sm w-8">{analysisData?.metrics && analysisData?.metrics?.turnCount.moderator}</span>
               </div>
             </div>
 
-            {analysisData.participants.panelists.map((panelist: any, index: number) => (
+            {analysisData?.participants && analysisData?.participants?.panelists.map((panelist: any, index: number) => (
               <div key={index} className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
                   <Bot className="w-4 h-4 text-orange-400" />
@@ -344,12 +357,12 @@ export default function PanelAnalysisPage() {
                     <div
                       className="bg-orange-500 h-full rounded-none"
                       style={{
-                        width: `${(analysisData.metrics.turnCount[`panelist-${index}` as keyof typeof analysisData.metrics.turnCount] / 12) * 100}%`,
+                        width: `${(analysisData?.metrics && analysisData?.metrics?.turnCount[`panelist-${index}` as keyof typeof analysisData.metrics.turnCount] / 12) * 100}%`,
                       }}
                     ></div>
                   </div>
                   <span className="text-white text-sm w-8">
-                    {analysisData.metrics.turnCount[`panelist-${index}` as keyof typeof analysisData.metrics.turnCount]}
+                    {analysisData?.metrics && analysisData?.metrics?.turnCount[`panelist-${index}` as keyof typeof analysisData.metrics.turnCount]}
                   </span>
                 </div>
               </div>
@@ -366,7 +379,7 @@ export default function PanelAnalysisPage() {
           <div className="space-y-4">
             <div className="text-center">
               <div className="text-3xl font-bold text-white mb-2">
-                {analysisData.metrics.requestsToSpeak.successful}/{analysisData.metrics.requestsToSpeak.total}
+                {analysisData.metrics && analysisData?.metrics?.requestsToSpeak.successful}/{analysisData.metrics && analysisData?.metrics?.requestsToSpeak.total}
               </div>
               <p className="text-sm text-neutral-400">Successful Requests</p>
             </div>
@@ -374,20 +387,20 @@ export default function PanelAnalysisPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <span className="text-neutral-300">Total Requests</span>
-                <span className="text-white">{analysisData.metrics.requestsToSpeak.total}</span>
+                <span className="text-white">{analysisData.metrics && analysisData?.metrics?.requestsToSpeak.total}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-neutral-300">Acknowledged</span>
                 <div className="flex items-center space-x-1">
                   <CheckCircle className="w-4 h-4 text-green-400" />
-                  <span className="text-white">{analysisData.metrics.requestsToSpeak.acknowledged}</span>
+                  <span className="text-white">{analysisData.metrics && analysisData?.metrics?.requestsToSpeak.acknowledged}</span>
                 </div>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-neutral-300">Gained Floor</span>
                 <div className="flex items-center space-x-1">
                   <CheckCircle className="w-4 h-4 text-blue-400" />
-                  <span className="text-white">{analysisData.metrics.requestsToSpeak.successful}</span>
+                  <span className="text-white">{analysisData.metrics && analysisData?.metrics?.requestsToSpeak.successful}</span>
                 </div>
               </div>
             </div>
@@ -419,11 +432,11 @@ export default function PanelAnalysisPage() {
                 <h4 className="font-medium text-blue-400">Your Stance Representation</h4>
               </div>
               <div className="flex items-center space-x-2">
-                {getEffectivenessIcon(analysisData.stanceRepresentation.user.score)}
+                {getEffectivenessIcon(analysisData.stanceRepresentation && analysisData?.stanceRepresentation?.user?.score)}
                 <span
-                  className={`font-medium ${getEffectivenessColor(analysisData.stanceRepresentation.user.effectiveness)}`}
+                  className={`font-medium ${getEffectivenessColor(analysisData.stanceRepresentation && analysisData?.stanceRepresentation?.user?.effectiveness)}`}
                 >
-                  {analysisData.stanceRepresentation.user.effectiveness}
+                  {analysisData.stanceRepresentation && analysisData?.stanceRepresentation?.user?.effectiveness}
                 </span>
               </div>
             </div>
@@ -431,11 +444,11 @@ export default function PanelAnalysisPage() {
               Your stated stance: "{analysisData?.participants?.user?.stance}"
             </p>
             <p className="text-sm text-neutral-300 mb-3">
-              Your stance was represented {analysisData.stanceRepresentation.user.effectiveness.toLowerCase()}. Key
+              Your stance was represented {analysisData?.stanceRepresentation && analysisData?.stanceRepresentation?.user?.effectiveness?.toLowerCase()}. Key
               arguments supporting this included:
             </p>
             <ul className="space-y-1">
-              {analysisData.stanceRepresentation.user.keyArguments.map((arg: string, index: number) => (
+              {analysisData?.stanceRepresentation && analysisData?.stanceRepresentation?.user?.keyArguments.map((arg: string, index: number) => (
                 <li key={index} className="flex items-start">
                   <span className="text-blue-400 mr-2">•</span>
                   <span className="text-neutral-300 text-sm">{arg}</span>
@@ -445,7 +458,7 @@ export default function PanelAnalysisPage() {
           </div>
 
           {/* AI Panelists Stance */}
-          {analysisData.participants.panelists.map((panelist: any, index: number) => (
+          {analysisData?.participants && analysisData?.participants?.panelists.map((panelist: any, index: number) => (
             <div key={index} className="bg-black border border-neutral-600 p-4 rounded-none">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-2">
@@ -453,17 +466,17 @@ export default function PanelAnalysisPage() {
                   <h4 className="font-medium text-orange-400">{panelist.name} Stance</h4>
                 </div>
                 <div className="flex items-center space-x-2">
-                  {getEffectivenessIcon(analysisData.stanceRepresentation.panelists[index].score)}
+                  {getEffectivenessIcon(analysisData?.stanceRepresentation && analysisData?.stanceRepresentation?.panelists[index]?.score)}
                   <span
-                    className={`font-medium ${getEffectivenessColor(analysisData.stanceRepresentation.panelists[index].effectiveness)}`}
+                    className={`font-medium ${getEffectivenessColor(analysisData?.stanceRepresentation && analysisData?.stanceRepresentation?.panelists[index]?.effectiveness)}`}
                   >
-                    {analysisData.stanceRepresentation.panelists[index].effectiveness}
+                    {analysisData?.stanceRepresentation && analysisData?.stanceRepresentation?.panelists[index]?.effectiveness}
                   </span>
                 </div>
               </div>
               <p className="text-sm text-neutral-400 mb-2">Stance: "{panelist.stance}"</p>
               <ul className="space-y-1">
-                {analysisData.stanceRepresentation.panelists[index].keyArguments.map((arg: string, argIndex: number) => (
+                {analysisData?.stanceRepresentation && analysisData?.stanceRepresentation?.panelists[index]?.keyArguments.map((arg: string, argIndex: number) => (
                   <li key={argIndex} className="flex items-start">
                     <span className="text-orange-400 mr-2">•</span>
                     <span className="text-neutral-300 text-sm">{arg}</span>
@@ -483,7 +496,7 @@ export default function PanelAnalysisPage() {
         </h3>
 
         <div className="space-y-3">
-          {analysisData.impactfulContributions.map((contribution: any, index: number) => (
+          {analysisData?.impactfulContributions && analysisData?.impactfulContributions?.map((contribution: any, index: number) => (
             <div key={index} className="bg-black border border-neutral-600 p-4 rounded-none">
               <div className="flex items-start space-x-3">
                 <Star className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
@@ -526,7 +539,7 @@ export default function PanelAnalysisPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-neutral-300">Overall Style</span>
-                <span className="text-white font-medium">{analysisData.moderatorEffectiveness.overall}</span>
+                <span className="text-white font-medium">{analysisData?.moderatorEffectiveness && analysisData?.moderatorEffectiveness?.overall}</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-neutral-300">Time Management</span>
@@ -534,10 +547,10 @@ export default function PanelAnalysisPage() {
                   <div className="w-20 bg-black rounded-none h-2 border border-neutral-600">
                     <div
                       className="bg-purple-500 h-full rounded-none"
-                      style={{ width: `${(analysisData.moderatorEffectiveness.timeManagement / 5) * 100}%` }}
+                      style={{ width: `${(analysisData?.moderatorEffectiveness && analysisData?.moderatorEffectiveness?.timeManagement / 5) * 100}%` }}
                     ></div>
                   </div>
-                  <span className="text-white text-sm">{analysisData.moderatorEffectiveness.timeManagement}/5</span>
+                  <span className="text-white text-sm">{analysisData?.moderatorEffectiveness && analysisData?.moderatorEffectiveness?.timeManagement}/5</span>
                 </div>
               </div>
               <div className="flex items-center justify-between">
@@ -546,10 +559,10 @@ export default function PanelAnalysisPage() {
                   <div className="w-20 bg-black rounded-none h-2 border border-neutral-600">
                     <div
                       className="bg-purple-500 h-full rounded-none"
-                      style={{ width: `${(analysisData.moderatorEffectiveness.questionQuality / 5) * 100}%` }}
+                      style={{ width: `${(analysisData?.moderatorEffectiveness && analysisData?.moderatorEffectiveness?.questionQuality / 5) * 100}%` }}
                     ></div>
                   </div>
-                  <span className="text-white text-sm">{analysisData.moderatorEffectiveness.questionQuality}/5</span>
+                  <span className="text-white text-sm">{analysisData?.moderatorEffectiveness && analysisData?.moderatorEffectiveness?.questionQuality}/5</span>
                 </div>
               </div>
               <div className="flex items-center justify-between">
@@ -558,10 +571,10 @@ export default function PanelAnalysisPage() {
                   <div className="w-20 bg-black rounded-none h-2 border border-neutral-600">
                     <div
                       className="bg-purple-500 h-full rounded-none"
-                      style={{ width: `${(analysisData.moderatorEffectiveness.fairness / 5) * 100}%` }}
+                      style={{ width: `${(analysisData?.moderatorEffectiveness && analysisData?.moderatorEffectiveness?.fairness / 5) * 100}%` }}
                     ></div>
                   </div>
-                  <span className="text-white text-sm">{analysisData.moderatorEffectiveness.fairness}/5</span>
+                  <span className="text-white text-sm">{analysisData?.moderatorEffectiveness && analysisData?.moderatorEffectiveness?.fairness}/5</span>
                 </div>
               </div>
             </div>
@@ -570,14 +583,14 @@ export default function PanelAnalysisPage() {
           <div>
             <h4 className="font-medium text-purple-400 mb-3">Detailed Feedback</h4>
             <div className="bg-black border border-neutral-600 p-3 rounded-none">
-              <p className="text-neutral-300 text-sm leading-relaxed">{analysisData.moderatorEffectiveness.feedback}</p>
+              <p className="text-neutral-300 text-sm leading-relaxed">{analysisData?.moderatorEffectiveness && analysisData?.moderatorEffectiveness?.feedback}</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Fallacy Detection */}
-      {analysisData.fallacies.length > 0 && (
+      {analysisData?.fallacies && analysisData?.fallacies?.length > 0 && (
         <div className="bg-neutral-900 border border-neutral-700 p-6 rounded-none">
           <h3 className="text-lg font-semibold mb-4 flex items-center">
             <AlertTriangle className="w-5 h-5 mr-2 text-yellow-400" />
@@ -585,7 +598,7 @@ export default function PanelAnalysisPage() {
           </h3>
 
           <div className="space-y-3">
-            {analysisData.fallacies.map((fallacy, index) => (
+            {analysisData?.fallacies && analysisData?.fallacies?.map((fallacy: any, index: number) => (
               <div key={index} className="bg-black border border-yellow-600 p-4 rounded-none">
                 <div className="flex items-start space-x-3">
                   <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
@@ -616,7 +629,7 @@ export default function PanelAnalysisPage() {
         </h3>
 
         <div className="space-y-4">
-          {analysisData.suggestions.map((suggestion, index) => (
+          {analysisData?.suggestions && analysisData?.suggestions?.map((suggestion: any, index: number) => (
             <div key={index} className="flex items-start space-x-3 bg-black border border-neutral-600 p-4 rounded-none">
               <Lightbulb className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0" />
               <p className="text-neutral-300 text-sm">{suggestion}</p>
@@ -686,12 +699,27 @@ export default function PanelAnalysisPage() {
           <div className="bg-neutral-900 border border-neutral-700 p-8 rounded-none text-center">
             <div className="space-y-4">
               <Users className="w-16 h-16 text-neutral-400 mx-auto" />
-              <h2 className="text-xl font-semibold text-white">Analysis Loading...</h2>
+              <h2 className="text-xl font-semibold text-white">
+                {isLoading ? "Analysis Loading..." : "Analysis Not Available"}
+              </h2>
               <p className="text-neutral-400">
-                Your panel debate analysis is being processed. Please wait a moment.
+                {isLoading 
+                  ? "Your panel debate analysis is being processed. Please wait a moment."
+                  : "Unable to load the analysis data. This might be because the analysis is still processing or there was an error."
+                }
               </p>
               <div className="flex justify-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                {isLoading ? (
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                ) : (
+                  <Button
+                    onClick={fetchAnalysisData}
+                    className="bg-white text-black hover:bg-neutral-200 rounded-none"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-2" />
+                    Retry Analysis
+                  </Button>
+                )}
               </div>
             </div>
           </div>

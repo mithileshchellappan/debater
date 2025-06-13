@@ -14,7 +14,7 @@ export default function MiniVoiceVisualizer({
   className = "",
 }: MiniVoiceVisualizerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const animationRef = useRef<number>()
+  const animationRef = useRef<number | undefined>(undefined)
 
   const colorMap = {
     blue: "0, 191, 255",

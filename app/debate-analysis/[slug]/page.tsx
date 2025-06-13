@@ -37,8 +37,12 @@ export default function DebateAnalysisPage() {
     async function fetchAnalysisData() {
       const callDetails = await fetch(`/api/analysis?callId=${slug}`)
       const data = await callDetails.json()
-      setAnalysisData(data.analysis.structuredData)
-      setTranscript(data.transcript)
+      if(data?.analysis?.structuredData) {
+        setAnalysisData(data.analysis.structuredData)
+      }
+      if(data?.transcript) {
+        setTranscript(data.transcript)
+      }
     }
     fetchAnalysisData()
   }, [])
@@ -215,9 +219,9 @@ export default function DebateAnalysisPage() {
                   <span className="text-neutral-300 capitalize">{key}</span>
                   <div className="flex items-center space-x-2">
                     <div className="w-20 bg-black rounded-none h-2 border border-neutral-600">
-                      <div className="bg-blue-500 h-full rounded-none" style={{ width: `${(value / 5) * 100}%` }}></div>
+                      <div className="bg-blue-500 h-full rounded-none" style={{ width: `${((value as number) / 5) * 100}%` }}></div>
                     </div>
-                    <span className="text-white text-sm w-8">{value}/5</span>
+                    <span className="text-white text-sm w-8">{value as number}/5</span>
                   </div>
                 </div>
               ))}
@@ -234,10 +238,10 @@ export default function DebateAnalysisPage() {
                     <div className="w-20 bg-black rounded-none h-2 border border-neutral-600">
                       <div
                         className="bg-orange-500 h-full rounded-none"
-                        style={{ width: `${(value / 5) * 100}%` }}
+                        style={{ width: `${((value as number) / 5) * 100}%` }}
                       ></div>
                     </div>
-                    <span className="text-white text-sm w-8">{value}/5</span>
+                    <span className="text-white text-sm w-8">{value as number}/5</span>
                   </div>
                 </div>
               ))}

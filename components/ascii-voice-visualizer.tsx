@@ -199,7 +199,6 @@ export default function AsciiVoiceVisualizer({
 
     // Analyze audio if available
     let volume = 0
-    let dominantFreq = 0
 
     // Check if AI is in thinking state
     const isAiThinking = aiStatus === "THINKING..."
