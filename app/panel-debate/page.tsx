@@ -69,10 +69,10 @@ export default function PanelDebatePage() {
     return () => clearInterval(interval)
   }, [isTimerRunning, callStatus])
 
-  // Auto-scroll transcript
+  // Auto-scroll transcript to top for newest messages
   useEffect(() => {
     if (transcriptRef.current) {
-      transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight
+      transcriptRef.current.scrollTop = 0
     }
   }, [messages, activeTranscript])
 
@@ -707,8 +707,24 @@ export default function PanelDebatePage() {
         {/* Transcript */}
         <div className="bg-black p-4 rounded-none">
           <div ref={transcriptRef} className="h-48 overflow-y-auto font-mono text-sm transcript-area">
-            {/* Show final transcript messages */}
-            {transcriptHistory.map((item, index) => {
+            {/* Show active (partial) transcript with debouncing - at the very top */}
+            {activeTranscript && activeTranscript.transcript.length > 3 && (
+              <div className="opacity-75 mb-2 transition-opacity duration-200">
+                <span className="text-green-400">[LIVE]</span>{' '}
+                <span className={`${
+                  activeTranscript.role === 'user' 
+                    ? 'text-blue-200' 
+                    : getSpeakerDisplayName(activeTranscript.role) === 'MODERATOR'
+                      ? 'text-purple-200'
+                      : 'text-orange-200'
+                }`}>
+                  {getSpeakerDisplayName(activeTranscript.role)}: {activeTranscript.transcript}
+                </span>
+              </div>
+            )}
+
+            {/* Show final transcript messages in reverse chronological order */}
+            {transcriptHistory.slice().reverse().map((item, index) => {
               const isUser = item.message.role === 'user'
               const isAI = item.message.role === 'assistant'
               const speakerName = getSpeakerDisplayName(item.message.role, item.speakerAtTime)
@@ -717,7 +733,7 @@ export default function PanelDebatePage() {
               
               return (
                 <div
-                  key={index}
+                  key={transcriptHistory.length - 1 - index}
                   className={`mb-2 ${
                     isUser 
                       ? "text-blue-300 text-right" 
@@ -735,22 +751,6 @@ export default function PanelDebatePage() {
                 </div>
               )
             })}
-            
-            {/* Show active (partial) transcript with debouncing */}
-            {activeTranscript && activeTranscript.transcript.length > 3 && (
-              <div className="opacity-75 mb-2 transition-opacity duration-200">
-                <span className="text-green-400">[LIVE]</span>{' '}
-                <span className={`${
-                  activeTranscript.role === 'user' 
-                    ? 'text-blue-200' 
-                    : getSpeakerDisplayName(activeTranscript.role) === 'MODERATOR'
-                      ? 'text-purple-200'
-                      : 'text-orange-200'
-                }`}>
-                  {getSpeakerDisplayName(activeTranscript.role)}: {activeTranscript.transcript}
-                </span>
-              </div>
-            )}
 
             {messages.length === 0 && !activeTranscript && (
               <div className="text-neutral-500">Real-time transcript will appear here...</div>

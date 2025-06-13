@@ -120,3 +120,26 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Dark scrollbar styling */
+.transcript-area {
+  scrollbar-width: thin;
+  scrollbar-color: #525252 #262626;
+}
+
+.transcript-area::-webkit-scrollbar {
+  width: 8px;
+}
+
+.transcript-area::-webkit-scrollbar-track {
+  background: #262626;
+}
+
+.transcript-area::-webkit-scrollbar-thumb {
+  background: #525252;
+  border-radius: 4px;
+}
+
+.transcript-area::-webkit-scrollbar-thumb:hover {
+  background: #737373;
+}

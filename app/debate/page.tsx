@@ -233,7 +233,7 @@ export default function DebatePage() {
 
   useEffect(() => {
     if (transcriptRef.current) {
-      transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight
+      transcriptRef.current.scrollTop = 0
     }
   }, [messages, activeTranscript])
 
@@ -780,27 +780,8 @@ Remember your role and respond appropriately to this context.`
 
         {/* Transcript */}
         <div className="bg-black p-4 rounded-none">
-          <div ref={transcriptRef} className="h-48 overflow-y-auto font-mono text-sm transcript-area ">
-            {/* Show final transcript messages */}
-            {transcriptHistory.map((item, index) => {
-              const isUser = item.message.role === 'user'
-              const isAI = item.message.role === 'assistant'
-              return (
-                <div
-                  key={index}
-                  className={`mb-2 ${
-                    isUser ? "text-blue-300 text-right" : isAI ? "text-orange-300 text-left" : "text-neutral-300"
-                  }`}
-                >
-                                     <span className="text-green-400">[{formatTimestamp(item.message.timestamp)}]</span>{' '}
-                   <span className="text-white">
-                     {item.message.role.toUpperCase()}: {item.message.transcript}
-                   </span>
-                </div>
-              )
-            })}
-            
-            {/* Show active (partial) transcript with debouncing */}
+          <div ref={transcriptRef} className="h-48 overflow-y-auto font-mono text-sm transcript-area">
+            {/* Show active (partial) transcript with debouncing - at the very top */}
             {activeTranscript && activeTranscript.transcript.length > 3 && (
               <div className="opacity-75 mb-2 transition-opacity duration-200">
                 <span className="text-green-400">[LIVE]</span>{' '}
@@ -809,6 +790,25 @@ Remember your role and respond appropriately to this context.`
                 </span>
               </div>
             )}
+
+            {/* Show final transcript messages in reverse chronological order */}
+            {transcriptHistory.slice().reverse().map((item, index) => {
+              const isUser = item.message.role === 'user'
+              const isAI = item.message.role === 'assistant'
+              return (
+                <div
+                  key={transcriptHistory.length - 1 - index}
+                  className={`mb-2 ${
+                    isUser ? "text-blue-300 text-right" : isAI ? "text-orange-300 text-left" : "text-neutral-300"
+                  }`}
+                >
+                  <span className="text-green-400">[{formatTimestamp(item.message.timestamp)}]</span>{' '}
+                  <span className="text-white">
+                    {item.message.role.toUpperCase()}: {item.message.transcript}
+                  </span>
+                </div>
+              )
+            })}
 
             {messages.length === 0 && !activeTranscript && (
               <div className="text-neutral-500">Real-time transcript will appear here...</div>
